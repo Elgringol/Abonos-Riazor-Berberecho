@@ -151,7 +151,6 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
                     className={`w-full h-auto block transition-all duration-700 ${imageState === 'success' ? 'opacity-100' : 'opacity-0'}`}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
-                    style={{ WebkitUserDrag: 'none' as any }}
                 />
             )}
 
