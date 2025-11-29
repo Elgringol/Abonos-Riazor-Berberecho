@@ -12,11 +12,31 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
   const [imageState, setImageState] = useState<'loading' | 'success' | 'error'>('loading');
   const [currentCandidateIndex, setCurrentCandidateIndex] = useState(0);
 
-  // Logo de la Peña para MARCA DE AGUA (Usamos el logo anterior que integra mejor sin fondo)
-  // ID Anterior: 17pNVMd42F6pDU7LOCPjPZ-xrUckcYNMe
+  // Logo de la Peña para MARCA DE AGUA
   const PENA_LOGO_ID = "17pNVMd42F6pDU7LOCPjPZ-xrUckcYNMe";
-  // CORRECCIÓN: Codificamos correctamente la URL para que wsrv.nl la procese sin errores
-  const penaLogoUrl = `https://wsrv.nl/?url=${encodeURIComponent(`https://drive.google.com/uc?id=${PENA_LOGO_ID}`)}&w=400&output=png`;
+  
+  // ESTRATEGIA DE RESPALDO (FALLBACK) PARA MARCA DE AGUA - SOLUCIÓN BUG VISUALIZACIÓN
+  // Fuente original (Thumbnail API es más permisiva y rápida que export=view)
+  const WM_SOURCE_URL = `https://drive.google.com/thumbnail?id=${PENA_LOGO_ID}&sz=w1000`;
+  
+  // 1. Primary: Proxy (Weserv). Vital para descargar la imagen (CORS) y transparencia PNG.
+  // Usamos la fuente thumbnail para alimentar al proxy.
+  const WM_PRIMARY = `https://wsrv.nl/?url=${encodeURIComponent(WM_SOURCE_URL)}&output=png`;
+  
+  // 2. Fallback: Directo.
+  const WM_FALLBACK = WM_SOURCE_URL;
+
+  const [watermarkSrc, setWatermarkSrc] = useState<string>(WM_PRIMARY);
+  const [isWatermarkFallback, setIsWatermarkFallback] = useState(false);
+
+  const handleWatermarkError = () => {
+    // Si falla el proxy, cambiamos automáticamente al enlace directo
+    if (!isWatermarkFallback) {
+        console.warn("Proxy de marca de agua falló. Cambiando a enlace directo (Fallback) y desactivando CORS.");
+        setWatermarkSrc(WM_FALLBACK);
+        setIsWatermarkFallback(true);
+    }
+  };
 
   // ---------------------------------------------------------
   // EXPIRATION DATE LOGIC (Security Feature)
@@ -57,8 +77,8 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
     
     return [
         // 1. GOOGLE THUMBNAIL API (FASTEST & MOST STABLE) - High Res
-        // Using w1920 to ensure high quality even for large screens, loads instantly
-        `https://drive.google.com/thumbnail?id=${driveId}&sz=w1920`,
+        // Using w4000 (4K resolution) to ensure maximum sharpness for barcodes while maintaining speed.
+        `https://drive.google.com/thumbnail?id=${driveId}&sz=w4000`,
 
         // 2. PROXY (Optimized WebP as backup)
         `https://wsrv.nl/?url=${encodeURIComponent(directLink)}&w=800&q=80&output=webp`,
@@ -184,12 +204,16 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
                  </div>
             </div>
 
-            {/* 3. WATERMARK (Peña Logo) - ADJUSTED POSITION */}
+            {/* 3. WATERMARK (Peña Logo) - ROBUST HYBRID METHOD (PROXY + DIRECT FALLBACK) */}
             <div className="absolute top-[15%] left-0 w-full h-[40%] flex items-center justify-center pointer-events-none z-20 overflow-hidden">
                 <img 
-                    src={penaLogoUrl} 
+                    src={watermarkSrc} 
+                    onError={handleWatermarkError}
                     alt="Marca de agua Peña" 
-                    className="w-[40%] opacity-25 grayscale contrast-150 brightness-95 mix-blend-multiply"
+                    // CRÍTICO: Si usamos el fallback directo de Google, debemos desactivar 'anonymous'
+                    // para evitar el bloqueo CORS que impide la visualización.
+                    crossOrigin={isWatermarkFallback ? undefined : "anonymous"}
+                    className="w-[40%] opacity-25 grayscale contrast-150 brightness-95 mix-blend-multiply transition-opacity duration-500"
                 />
             </div>
             
