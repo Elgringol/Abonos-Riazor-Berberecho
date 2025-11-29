@@ -1,0 +1,5 @@
+{
+  "name": "Gestor de Abonos - Riazor",
+  "description": "Aplicación para gestionar el acceso de socios, búsqueda en Google Sheets y generación de pases digitales seguros con marca de agua.",
+  "requestFramePermissions": []
+}
