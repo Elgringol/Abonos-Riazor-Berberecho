@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Loader2, ShieldCheck, Clock } from 'lucide-react';
+import { Loader2, Clock } from 'lucide-react';
 
 interface CardCanvasProps {
   memberId: string;
@@ -151,7 +151,7 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
                     className={`w-full h-auto block transition-all duration-700 ${imageState === 'success' ? 'opacity-100' : 'opacity-0'}`}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
-                    style={{ WebkitUserDrag: 'none' }}
+                    style={{ WebkitUserDrag: 'none' as any }}
                 />
             )}
 

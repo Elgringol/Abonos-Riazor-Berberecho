@@ -4,12 +4,12 @@ import { fetchMembers, DEFAULT_IMAGES } from './services/googleSheet';
 import { Member } from './types';
 import { generateWhatsAppLink } from './utils';
 import CardCanvas from './components/CardCanvas';
-import { Search, Share2, CheckCircle, Lock, RefreshCw, XCircle, Copy, Eye, Image as ImageIcon, Send, Download, Globe, Wifi, Pencil, UserPlus, Users, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Search, Share2, CheckCircle, RefreshCw, XCircle, Copy, Eye, Image as ImageIcon, Send, Download, Globe, Wifi, Pencil, UserPlus, Users, RotateCcw, AlertTriangle } from 'lucide-react';
 
 // --- Constantes Visuales ---
 const LOGO_ID = "10m8lfNupdyr8st5zXKE5xobx-NsciILT";
-// Usamos proxy para asegurar carga y formato correcto
-const LOGO_URL = `https://wsrv.nl/?url=https://drive.google.com/uc?id=${LOGO_ID}&output=png`;
+// CORRECCIÓN: Usamos encodeURIComponent para asegurar que el proxy (wsrv.nl) lea correctamente la URL de Drive sin errores.
+const LOGO_URL = `https://wsrv.nl/?url=${encodeURIComponent(`https://drive.google.com/uc?id=${LOGO_ID}`)}&w=400&output=png`;
 
 // --- Configuración de los 10 Abonos Fijos ---
 // Definición explícita de cada slot con sus datos de asiento y su imagen correspondiente.
@@ -252,7 +252,16 @@ const Dashboard: React.FC = () => {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 bg-depor-blue/5 rounded-b-[50%] -z-10"></div>
         <div className="flex justify-center mb-5 relative">
             <div className="relative z-10 p-2 bg-white rounded-full shadow-sm">
-                <img src={LOGO_URL} alt="Logo" className="h-28 w-auto object-contain hover:scale-105 transition-transform duration-300 drop-shadow-sm" />
+                {/* LOGO: Con onError por si acaso, aunque la URL corregida debería funcionar */}
+                <img 
+                    src={LOGO_URL} 
+                    alt="Logo" 
+                    className="h-28 w-auto object-contain hover:scale-105 transition-transform duration-300 drop-shadow-sm"
+                    onError={(e) => {
+                        // Fallback si falla el proxy
+                        e.currentTarget.src = `https://drive.google.com/thumbnail?id=${LOGO_ID}&sz=w400`;
+                    }}
+                />
             </div>
         </div>
         <h1 className="text-3xl font-black text-depor-blue tracking-tighter uppercase leading-none">
