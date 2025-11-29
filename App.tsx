@@ -8,8 +8,8 @@ import { Search, Share2, CheckCircle, RefreshCw, XCircle, Copy, Eye, Image as Im
 
 // --- Constantes Visuales ---
 const LOGO_ID = "10m8lfNupdyr8st5zXKE5xobx-NsciILT";
-// CORRECCIÓN: Usamos encodeURIComponent para asegurar que el proxy (wsrv.nl) lea correctamente la URL de Drive sin errores.
-const LOGO_URL = `https://wsrv.nl/?url=${encodeURIComponent(`https://drive.google.com/uc?id=${LOGO_ID}`)}&w=400&output=png`;
+// CORRECCIÓN: Usamos Thumbnail API directa para el logo principal para máxima velocidad
+const LOGO_URL = `https://drive.google.com/thumbnail?id=${LOGO_ID}&sz=w800`;
 
 // --- Configuración de los 10 Abonos Fijos ---
 // Definición explícita de cada slot con sus datos de asiento y su imagen correspondiente.
@@ -59,33 +59,40 @@ const getFirstName = (fullName: string) => {
   return words[0].toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
 };
 
-// 2. Generar Link del Abono (AHORA INCLUYE TIMESTAMP DE CADUCIDAD)
-const generateLinkForMember = (member: Member, referenceTimestamp?: number): string => {
+// 2. Generar Link del Abono (AHORA INCLUYE TIMESTAMP Y SLOT ID)
+const generateLinkForMember = (member: Member, referenceTimestamp?: number, slotId?: number): string => {
     // Detectamos la URL base actual (sea localhost o web publicada)
     const baseUrl = window.location.href.split('#')[0].split('?')[0];
-    // Añadimos el parámetro de tiempo para validar caducidad en el visor
-    const timeParam = referenceTimestamp ? `&t=${referenceTimestamp}` : '';
+    
+    // Construimos los parámetros
+    const params = new URLSearchParams();
+    params.set('id', member.id);
+    if (referenceTimestamp) params.set('t', referenceTimestamp.toString());
+    if (slotId) params.set('slot', slotId.toString()); // IMPORTANTE: Pasamos el Slot ID
+
     // Usamos HashRouter style (#/view)
-    return `${baseUrl}#/view?id=${member.id}${timeParam}`;
+    return `${baseUrl}#/view?${params.toString()}`;
 };
 
-// 3. Generar Mensaje de WhatsApp
+// 3. Generar Mensaje de WhatsApp (MEJORADO Y VISUAL)
 const getWhatsAppMessage = (member: Member, link: string) => {
     const firstName = getFirstName(member.name);
     
-    const message = `💙🤍 *¡HOLA ${firstName.toUpperCase()}!*
+    // Mensaje con emojis compatibles y estructura clara
+    const message = `👋 Hola *${firstName.toUpperCase()}*,
 
-Aquí tienes tu abono de la Peña para animar al Dépor en Riazor.
+🔵⚪ *TU ABONO DIGITAL - DÉPOR*
 
-🏟️ *TU PASE DE ACCESO:*
+Aquí tienes tu enlace de acceso único para entrar en Riazor:
+👇👇👇
 ${link}
 
-⚠️ *PARA ENTRAR SIN PROBLEMAS:*
-🔆 Sube el *brillo al máximo*.
-🛑 Muestra el *código de barras* inferior.
-📲 *No uses captura*, abre este enlace.
+🚨 *INSTRUCCIONES IMPORTANTES:*
+1️⃣ 🔆 Sube el *BRILLO* de tu móvil al máximo.
+2️⃣ 📲 Muestra el *CÓDIGO DE BARRAS* en el torno.
+3️⃣ ❌ *NO* uses captura de pantalla (el pase caduca).
 
-¡Forza Dépor!`;
+¡Nos vemos en Riazor! ¡Forza Dépor!`;
 
     return generateWhatsAppLink(member.phone, message);
 };
@@ -130,8 +137,8 @@ const Dashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   
   // Estado para Vista Previa Completa y Quick Share
-  const [selectedPreviewData, setSelectedPreviewData] = useState<{member: Member, imageUrl: string} | null>(null);
-  const [quickShareData, setQuickShareData] = useState<{member: Member, imageUrl: string} | null>(null);
+  const [selectedPreviewData, setSelectedPreviewData] = useState<{member: Member, imageUrl: string, slotId: number} | null>(null);
+  const [quickShareData, setQuickShareData] = useState<{member: Member, imageUrl: string, slotId: number} | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -224,7 +231,8 @@ const Dashboard: React.FC = () => {
   const handlePreview = (slotId: number, imageUrl: string) => {
     const member = assignments[slotId];
     if (member) {
-        setSelectedPreviewData({ member, imageUrl });
+        // Pasamos slotId para asegurar correspondencia
+        setSelectedPreviewData({ member, imageUrl, slotId });
     }
   };
 
@@ -232,7 +240,8 @@ const Dashboard: React.FC = () => {
     const member = assignments[slotId];
     if (member) {
         setCopied(false);
-        setQuickShareData({ member, imageUrl });
+        // Pasamos slotId para generar el enlace correcto
+        setQuickShareData({ member, imageUrl, slotId });
     }
   };
 
@@ -252,15 +261,10 @@ const Dashboard: React.FC = () => {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 bg-depor-blue/5 rounded-b-[50%] -z-10"></div>
         <div className="flex justify-center mb-5 relative">
             <div className="relative z-10 p-2 bg-white rounded-full shadow-sm">
-                {/* LOGO: Con onError por si acaso, aunque la URL corregida debería funcionar */}
                 <img 
                     src={LOGO_URL} 
                     alt="Logo" 
                     className="h-28 w-auto object-contain hover:scale-105 transition-transform duration-300 drop-shadow-sm"
-                    onError={(e) => {
-                        // Fallback si falla el proxy
-                        e.currentTarget.src = `https://drive.google.com/thumbnail?id=${LOGO_ID}&sz=w400`;
-                    }}
                 />
             </div>
         </div>
@@ -476,14 +480,14 @@ const Dashboard: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Render hidden card using the SLOT IMAGE, NOT the member image, AND the Reference Timestamp */}
+                {/* Render hidden card using the SLOT IMAGE */}
                 <div className="fixed left-[-9999px]">
                     <div id={`quick-card-${quickShareData.member.id}`}>
                         <CardCanvas 
                             memberId={quickShareData.member.id} 
                             memberName={quickShareData.member.name} 
                             imageUrl={quickShareData.imageUrl} 
-                            referenceTimestamp={lastResetTime} // <-- Pass reset time
+                            referenceTimestamp={lastResetTime} 
                         />
                     </div>
                 </div>
@@ -495,7 +499,7 @@ const Dashboard: React.FC = () => {
                         </h4>
                         <div className="grid grid-cols-2 gap-2">
                              <a 
-                                href={getWhatsAppMessage(quickShareData.member, generateLinkForMember(quickShareData.member, lastResetTime))}
+                                href={getWhatsAppMessage(quickShareData.member, generateLinkForMember(quickShareData.member, lastResetTime, quickShareData.slotId))}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="flex items-center justify-center bg-[#25D366] text-white font-bold py-3 px-2 rounded-lg hover:bg-[#20ba59] transition-all shadow-sm active:scale-[0.98] gap-2 text-xs"
@@ -503,7 +507,7 @@ const Dashboard: React.FC = () => {
                                 <Send className="w-4 h-4" /> WhatsApp
                             </a>
                             <button 
-                                onClick={() => copyToClipboard(generateLinkForMember(quickShareData.member, lastResetTime))}
+                                onClick={() => copyToClipboard(generateLinkForMember(quickShareData.member, lastResetTime, quickShareData.slotId))}
                                 className="flex items-center justify-center bg-white border border-gray-200 text-gray-700 font-bold py-3 px-2 rounded-lg hover:bg-gray-50 transition-all shadow-sm active:scale-[0.98] gap-2 text-xs"
                             >
                                 {copied ? <CheckCircle className="w-4 h-4 text-green-500"/> : <Copy className="w-4 h-4"/>}
@@ -546,14 +550,14 @@ const Dashboard: React.FC = () => {
                         memberId={selectedPreviewData.member.id} 
                         memberName={selectedPreviewData.member.name} 
                         imageUrl={selectedPreviewData.imageUrl} 
-                        referenceTimestamp={lastResetTime} // <-- Pass reset time
+                        referenceTimestamp={lastResetTime} 
                       />
                   </div>
                </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 shrink-0">
                <a 
-                href={getWhatsAppMessage(selectedPreviewData.member, generateLinkForMember(selectedPreviewData.member, lastResetTime))}
+                href={getWhatsAppMessage(selectedPreviewData.member, generateLinkForMember(selectedPreviewData.member, lastResetTime, selectedPreviewData.slotId))}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full bg-[#25D366] text-white font-bold py-3 px-4 rounded-xl hover:bg-[#20ba59] transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
@@ -580,6 +584,7 @@ const SecureViewer: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [referenceTimestamp, setReferenceTimestamp] = useState<number | undefined>(undefined);
+  const [forcedImageUrl, setForcedImageUrl] = useState<string | undefined>(undefined);
   const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
@@ -588,7 +593,8 @@ const SecureViewer: React.FC = () => {
         const queryString = hash.split('?')[1];
         const urlParams = new URLSearchParams(queryString);
         const id = urlParams.get('id');
-        const timestampStr = urlParams.get('t'); // Get timestamp from URL
+        const timestampStr = urlParams.get('t'); 
+        const slotIdStr = urlParams.get('slot'); // Leer Slot ID
 
         if (!id) {
             setError('Enlace inválido: falta el ID del socio.');
@@ -596,11 +602,10 @@ const SecureViewer: React.FC = () => {
             return;
         }
 
-        // VALIDAR CADUCIDAD
+        // 1. VALIDAR CADUCIDAD
         if (timestampStr) {
             const timestamp = parseInt(timestampStr);
             setReferenceTimestamp(timestamp);
-            
             const expirationTime = timestamp + (96 * 60 * 60 * 1000); // 96h
             if (Date.now() > expirationTime) {
                 setIsExpired(true);
@@ -609,6 +614,16 @@ const SecureViewer: React.FC = () => {
             }
         }
 
+        // 2. FORZAR IMAGEN DEL SLOT (Solución problema "Tarjeta Incorrecta")
+        if (slotIdStr) {
+            const slotId = parseInt(slotIdStr);
+            const slotConfig = PASS_SLOTS.find(s => s.slotId === slotId);
+            if (slotConfig) {
+                setForcedImageUrl(slotConfig.imageUrl);
+            }
+        }
+
+        // 3. CARGAR SOCIO
         try {
             const allMembers = await fetchMembers();
             const found = allMembers.find(m => m.id === id);
@@ -646,11 +661,15 @@ const SecureViewer: React.FC = () => {
       <div className="bg-green-500/10 px-5 py-2 mb-6 rounded-full border border-green-500/30">
           <p className="text-green-400 text-xs font-bold tracking-widest flex items-center gap-2 uppercase"><CheckCircle className="w-4 h-4"/> Pase Verificado</p>
       </div>
-      {/* Pass the referenceTimestamp to ensure visual consistency */}
+      
+      {/* 
+        CRÍTICO: Usamos 'forcedImageUrl' si existe (viene del slot). 
+        Si no, usamos 'member.imageUrl' como fallback. 
+      */}
       <CardCanvas 
         memberId={member.id} 
         memberName={member.name} 
-        imageUrl={member.imageUrl} 
+        imageUrl={forcedImageUrl || member.imageUrl} 
         referenceTimestamp={referenceTimestamp}
       />
     </div>

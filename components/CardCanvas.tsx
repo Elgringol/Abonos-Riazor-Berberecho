@@ -15,7 +15,8 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
   // Logo de la Peña para MARCA DE AGUA (Usamos el logo anterior que integra mejor sin fondo)
   // ID Anterior: 17pNVMd42F6pDU7LOCPjPZ-xrUckcYNMe
   const PENA_LOGO_ID = "17pNVMd42F6pDU7LOCPjPZ-xrUckcYNMe";
-  const penaLogoUrl = `https://wsrv.nl/?url=https://drive.google.com/uc?id=${PENA_LOGO_ID}&w=400&output=png`;
+  // CORRECCIÓN: Codificamos correctamente la URL para que wsrv.nl la procese sin errores
+  const penaLogoUrl = `https://wsrv.nl/?url=${encodeURIComponent(`https://drive.google.com/uc?id=${PENA_LOGO_ID}`)}&w=400&output=png`;
 
   // ---------------------------------------------------------
   // EXPIRATION DATE LOGIC (Security Feature)
@@ -36,7 +37,7 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
   }, [referenceTimestamp]);
 
   // ---------------------------------------------------------
-  // ROBUST IMAGE STRATEGY: CASCADE LOADING
+  // ROBUST IMAGE STRATEGY: CASCADE LOADING (Optimized for Speed)
   // ---------------------------------------------------------
   const imageCandidates = useMemo(() => {
     if (!imageUrl) return [];
@@ -55,13 +56,14 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
     const directLink = `https://drive.google.com/uc?export=view&id=${driveId}`;
     
     return [
-        // 1. PROXY (Fastest, caches, handles CORS well)
+        // 1. GOOGLE THUMBNAIL API (FASTEST & MOST STABLE) - High Res
+        // Using w1920 to ensure high quality even for large screens, loads instantly
+        `https://drive.google.com/thumbnail?id=${driveId}&sz=w1920`,
+
+        // 2. PROXY (Optimized WebP as backup)
         `https://wsrv.nl/?url=${encodeURIComponent(directLink)}&w=800&q=80&output=webp`,
         
-        // 2. GOOGLE THUMBNAIL API (Very robust)
-        `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`,
-        
-        // 3. DIRECT EXPORT (Standard method, fallback)
+        // 3. DIRECT EXPORT (Last resort, slowest)
         directLink
     ];
   }, [imageUrl]);
@@ -125,11 +127,6 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
     <div id={`card-${memberId}`} className="relative w-full max-w-[340px] mx-auto perspective-1000 bg-white">
       
       {/* CARD CONTAINER */}
-      {/* 
-          CAMBIO CRÍTICO: Eliminado 'aspect-[9/16]' y 'h-full' en la imagen.
-          Ahora usamos 'h-auto' para que el contenedor crezca según el tamaño real de la imagen.
-          Esto evita recortar la parte inferior (código de barras).
-      */}
       <div className="relative overflow-hidden rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-white transition-transform duration-500 hover:scale-[1.01] flex flex-col min-h-[200px]">
         
         {/* 1. IMAGE AREA */}
@@ -188,12 +185,10 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
             </div>
 
             {/* 3. WATERMARK (Peña Logo) - ADJUSTED POSITION */}
-            {/* Se baja un poco (top-[15%]) y se usa una altura del 40% para centrarlo visualmente en la mitad superior */}
             <div className="absolute top-[15%] left-0 w-full h-[40%] flex items-center justify-center pointer-events-none z-20 overflow-hidden">
                 <img 
                     src={penaLogoUrl} 
                     alt="Marca de agua Peña" 
-                    // mix-blend-multiply: Elimina el blanco haciendo que actúe como transparencia.
                     className="w-[40%] opacity-25 grayscale contrast-150 brightness-95 mix-blend-multiply"
                 />
             </div>
