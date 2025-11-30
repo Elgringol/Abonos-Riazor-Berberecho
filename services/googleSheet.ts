@@ -79,7 +79,8 @@ export const fetchMembers = async (): Promise<Member[]> => {
         return {
             id: row[findKey(['id', 'socio', 'número', 'numero'])] || '0',
             name: row[findKey(['nombre', 'name', 'apellidos'])] || 'Desconocido',
-            phone: row[findKey(['teléfono', 'telefono', 'movil', 'phone'])] || '',
+            // Ampliamos la búsqueda de teléfono para incluir variantes comunes
+            phone: row[findKey(['teléfono', 'telefono', 'movil', 'phone', 'tfn', 'tfno', 'celular', 'móvil'])] || '',
             paid: isPaid ? 'SI' : 'NO',
             imageUrl: rawImgUrl,
             ...row

@@ -72,21 +72,24 @@ export const getCardDataFromUrl = (): string | null => {
 };
 
 export const generateWhatsAppLink = (phone: string, text: string) => {
-  // Limpiar caracteres no numéricos
+  // 1. Limpieza Agresiva: Eliminar todo lo que no sea un número (espacios, guiones, +, paréntesis)
   let cleanPhone = phone.replace(/\D/g, '');
   
-  // Corrección inteligente para números de España:
+  // 2. CRÍTICO: Eliminar ceros a la izquierda (ej: 0034666... -> 34666...)
+  // WhatsApp API falla si el número empieza por 00.
+  cleanPhone = cleanPhone.replace(/^0+/, '');
+
+  // 3. Corrección inteligente para números de España:
   // Si tiene 9 dígitos y empieza por 6, 7 (móviles) o 9, 8 (fijos/otros), asumimos que falta el prefijo 34.
-  // Esto soluciona el bug de que WhatsApp web/app no detecte el número si no tiene código de país.
+  // Esto arregla el caso donde en el Excel están como "666111222".
   if (cleanPhone.length === 9 && /^[6789]/.test(cleanPhone)) {
       cleanPhone = `34${cleanPhone}`;
   }
 
   const encodedText = encodeURIComponent(text);
   
-  // CAMBIO CRÍTICO: Usar api.whatsapp.com en lugar de wa.me.
-  // wa.me suele fallar en la codificación de emojis (Unicode) al redirigir a WhatsApp Web/Desktop.
-  // La API completa gestiona correctamente los caracteres especiales en todas las plataformas.
+  // Usamos api.whatsapp.com para máxima compatibilidad (escritorio y móvil)
+  // wa.me a veces falla con la codificación de emojis en escritorio.
   return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
 };
 
