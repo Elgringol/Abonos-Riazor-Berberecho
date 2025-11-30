@@ -72,9 +72,22 @@ export const getCardDataFromUrl = (): string | null => {
 };
 
 export const generateWhatsAppLink = (phone: string, text: string) => {
-  const cleanPhone = phone.replace(/\D/g, '');
+  // Limpiar caracteres no numéricos
+  let cleanPhone = phone.replace(/\D/g, '');
+  
+  // Corrección inteligente para números de España:
+  // Si tiene 9 dígitos y empieza por 6, 7 (móviles) o 9, 8 (fijos/otros), asumimos que falta el prefijo 34.
+  // Esto soluciona el bug de que WhatsApp web/app no detecte el número si no tiene código de país.
+  if (cleanPhone.length === 9 && /^[6789]/.test(cleanPhone)) {
+      cleanPhone = `34${cleanPhone}`;
+  }
+
   const encodedText = encodeURIComponent(text);
-  return `https://wa.me/${cleanPhone}?text=${encodedText}`;
+  
+  // CAMBIO CRÍTICO: Usar api.whatsapp.com en lugar de wa.me.
+  // wa.me suele fallar en la codificación de emojis (Unicode) al redirigir a WhatsApp Web/Desktop.
+  // La API completa gestiona correctamente los caracteres especiales en todas las plataformas.
+  return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
 };
 
 export const getExpirationDate = (): number => {
