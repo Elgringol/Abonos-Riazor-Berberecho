@@ -4,6 +4,7 @@ export interface Member {
   phone: string;
   paid: string; // 'SI' or 'NO'
   imageUrl?: string; // Optional URL from the sheet or overrides
+  history?: string[]; // Array of strings representing previous wins imported from the sheet
   [key: string]: any;
 }
 
