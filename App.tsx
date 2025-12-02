@@ -4,7 +4,7 @@ import { fetchMembers, DEFAULT_IMAGES } from './services/googleSheet';
 import { Member } from './types';
 import { generateWhatsAppLink } from './utils';
 import CardCanvas from './components/CardCanvas';
-import { Search, Share2, CheckCircle, RefreshCw, XCircle, Copy, Eye, Image as ImageIcon, Send, Download, Globe, Wifi, Pencil, UserPlus, Users, RotateCcw, AlertTriangle, Trophy, Ticket, ClipboardList, Shuffle, ArrowRightCircle, Calendar, Check, X, MessageCircle, History, Archive, Save, User, BarChart3, Database } from 'lucide-react';
+import { Search, Share2, CheckCircle, RefreshCw, XCircle, Copy, Eye, Image as ImageIcon, Send, Download, Globe, Pencil, UserPlus, Users, RotateCcw, AlertTriangle, Trophy, Ticket, ClipboardList, Shuffle, ArrowRightCircle, Calendar, Check, X, MessageCircle, History, Archive, Save, User, Database } from 'lucide-react';
 
 // --- Constantes Visuales ---
 const LOGO_ID = "10m8lfNupdyr8st5zXKE5xobx-NsciILT";
@@ -119,13 +119,6 @@ const downloadCardImage = async (elementId: string, fileName: string) => {
 };
 
 // --- Tipos para el Sorteo ---
-interface RaffleSession {
-    matchName: string;
-    winners: Member[];
-    reserves: Member[];
-    reserveWinners: Member[];
-    date: number;
-}
 type WinnerStatus = 'pending' | 'confirmed' | 'rejected';
 
 // --- Tipo para Historial ---
@@ -145,7 +138,6 @@ const Dashboard: React.FC = () => {
     
   const [allMembers, setAllMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
-  const [isLocalhost, setIsLocalhost] = useState(false);
   
   // Estado para la asignación de socios a slots
   // Diccionario: { [slotId]: Member }
@@ -179,7 +171,6 @@ const Dashboard: React.FC = () => {
       return saved ? JSON.parse(saved) : [];
   });
   const [reserveSpotsNeeded, setReserveSpotsNeeded] = useState(1);
-  const [showRaffleModal, setShowRaffleModal] = useState(false);
   const [showReserveSearch, setShowReserveSearch] = useState(false);
 
   // --- ESTADO HISTORIAL ---
@@ -201,7 +192,6 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    setIsLocalhost(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     
     // Cargar asignaciones guardadas
     const saved = localStorage.getItem('slot_assignments');
