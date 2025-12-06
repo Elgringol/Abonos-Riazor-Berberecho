@@ -89,6 +89,27 @@ const downloadCardImage = async (elementId: string, fileName: string) => {
     }
 };
 
+// Función crítica: Reconstruye la lista de excluidos (cycleHistory) basándose únicamente
+// en los partidos CERRADOS y GUARDADOS (MatchHistoryRecord).
+// Esto elimina el "ruido" de sorteos de prueba no guardados.
+const reconstructCycleHistory = (history: MatchHistoryRecord[]): string[] => {
+    let cycleIds: Set<string> = new Set();
+    
+    // Ordenamos cronológicamente: del más antiguo al más reciente
+    const sortedHistory = [...history].sort((a, b) => a.date - b.date);
+
+    sortedHistory.forEach(match => {
+        // Si el partido marcó un reinicio, limpiamos todo lo anterior
+        if (match.isCycleReset) {
+            cycleIds.clear();
+        }
+        // Añadimos los ganadores de este partido al ciclo
+        match.winners.forEach(w => cycleIds.add(w.id));
+    });
+
+    return Array.from(cycleIds);
+};
+
 type WinnerStatus = 'pending' | 'confirmed' | 'rejected';
 
 // --- Sub-Component: Dashboard (Admin View) ---
@@ -156,29 +177,32 @@ const Dashboard: React.FC = () => {
           let cloudState = await loadCloudData();
           
           // DETECCIÓN DE NUBE VACÍA O ESTADO INICIAL
-          // Si la nube devuelve null o un objeto vacío (sin lastResetTime), asumimos que es nueva.
           const isCloudEmpty = !cloudState || (!cloudState.lastResetTime && !cloudState.assignments);
 
           if (cloudState && !isCloudEmpty) {
-              // --- ESCENARIO A: La nube tiene datos. La nube manda. ---
               console.log("Cargando datos desde la Nube...");
               setAssignments(cloudState.assignments || {});
               setMatchHistory(cloudState.matchHistory || []);
-              setCycleHistory(cloudState.cycleHistory || []);
               setLastResetTime(cloudState.lastResetTime || Date.now());
+
+              // RECONSTRUCCIÓN AUTOMÁTICA DEL HISTORIAL DE CICLOS (LIMPIEZA DE DATOS SUCIOS)
+              const cleanCycleHistory = reconstructCycleHistory(cloudState.matchHistory || []);
+              setCycleHistory(cleanCycleHistory);
 
               // Restaurar estado del sorteo activo si existe
               if (cloudState.activeRaffle) {
                   setMatchName(cloudState.activeRaffle.matchName || '');
                   setRaffleWinners(cloudState.activeRaffle.winners || []);
-                  // Conversión segura de tipos
                   setWinnersStatus(cloudState.activeRaffle.winnersStatus as Record<string, WinnerStatus> || {});
                   setReserveList(cloudState.activeRaffle.reserveList || []);
                   setReserveWinners(cloudState.activeRaffle.reserveWinners || []);
+                  // Recuperamos el estado de reset del sorteo activo
+                  setWasCycleResetInCurrentRaffle(!!cloudState.activeRaffle.isCycleReset);
+              } else {
+                  setWasCycleResetInCurrentRaffle(false);
               }
               setSyncStatus('synced');
           } else {
-              // --- ESCENARIO B: La nube está vacía o falló. Usamos LocalStorage. ---
               console.log("Usando LocalStorage (Fallback o Migración Inicial)");
               const savedAssignments = localStorage.getItem('slot_assignments');
               const localAssignments = savedAssignments ? JSON.parse(savedAssignments) : {};
@@ -188,9 +212,9 @@ const Dashboard: React.FC = () => {
               const localMatchHistory = savedHistory ? JSON.parse(savedHistory) : [];
               setMatchHistory(localMatchHistory);
 
-              const savedCycle = localStorage.getItem('raffle_cycle_history_v2');
-              const localCycleHistory = savedCycle ? JSON.parse(savedCycle) : [];
-              setCycleHistory(localCycleHistory);
+              // RECONSTRUCCIÓN TAMBIÉN EN LOCAL
+              const cleanCycleHistory = reconstructCycleHistory(localMatchHistory);
+              setCycleHistory(cleanCycleHistory);
 
               const savedTime = localStorage.getItem('last_reset_time');
               const localLastResetTime = savedTime ? parseInt(savedTime) : Date.now();
@@ -198,8 +222,6 @@ const Dashboard: React.FC = () => {
               
               setSyncStatus('idle');
 
-              // --- MIGRACIÓN AUTOMÁTICA ---
-              // Si la nube está configurada pero está vacía, y tenemos datos locales, los subimos.
               if (isConfigured && isCloudEmpty) {
                   const hasLocalData = Object.keys(localAssignments).length > 0 || localMatchHistory.length > 0;
                   if (hasLocalData) {
@@ -207,7 +229,7 @@ const Dashboard: React.FC = () => {
                       const migrationState: AppState = {
                           assignments: localAssignments,
                           matchHistory: localMatchHistory,
-                          cycleHistory: localCycleHistory,
+                          cycleHistory: cleanCycleHistory, // Subimos la versión limpia
                           lastResetTime: localLastResetTime,
                           activeRaffle: null
                       };
@@ -226,11 +248,9 @@ const Dashboard: React.FC = () => {
   };
 
   // --- FUNCIÓN CENTRALIZADA DE GUARDADO ---
-  // Esta función se llama cada vez que modificamos datos importantes
   const persistState = async (overrides: Partial<AppState> = {}) => {
       setSyncStatus('syncing');
       
-      // Construimos el estado actual + las modificaciones
       const currentState: AppState = {
           assignments,
           matchHistory,
@@ -242,12 +262,13 @@ const Dashboard: React.FC = () => {
               winnersStatus,
               reserveList,
               reserveWinners,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              isCycleReset: wasCycleResetInCurrentRaffle // Guardamos este flag
           },
-          ...overrides // Sobrescribimos con lo nuevo
+          ...overrides
       };
 
-      // Actualizamos LocalStorage (Espejo inmediato)
+      // Actualizamos LocalStorage
       localStorage.setItem('slot_assignments', JSON.stringify(currentState.assignments));
       localStorage.setItem('raffle_match_history_v2', JSON.stringify(currentState.matchHistory));
       localStorage.setItem('raffle_cycle_history_v2', JSON.stringify(currentState.cycleHistory));
@@ -277,63 +298,65 @@ const Dashboard: React.FC = () => {
       return { total: allMembers.length, active: activeMembers.length, pending: pendingToWin.length };
   }, [allMembers, cycleHistory]);
 
-  // --- LÓGICA DE NEGOCIO (Actualizada con persistState) ---
+  // --- LÓGICA DE NEGOCIO (Actualizada) ---
 
   const runMainRaffle = () => {
       if (!matchName.trim()) { alert("Introduce el nombre del partido."); return; }
       const eligibleMembers = allMembers.filter(m => m.paid.toUpperCase() === 'SI' || m.paid.toUpperCase() === 'SÍ');
       
       let winners: Member[] = [];
-      let newCycleHistory = [...cycleHistory];
       let cycleResetOccurred = false;
 
+      // Calculamos candidatos basándonos en el historial ACTUAL GUARDADO
       let availableInCycle = eligibleMembers.filter(m => !cycleHistory.includes(m.id) && !(m.history && m.history.length > 0));
 
       if (availableInCycle.length < 10) {
+          // Si no hay suficientes, cogemos los que quedan y reiniciamos
           winners = [...availableInCycle];
           const winnersIds = new Set(winners.map(w => w.id));
           const refreshedPot = eligibleMembers.filter(m => !winnersIds.has(m.id));
           const spotsNeeded = 10 - winners.length;
           const shuffledPot = [...refreshedPot].sort(() => 0.5 - Math.random());
           winners = [...winners, ...shuffledPot.slice(0, spotsNeeded)];
-          newCycleHistory = winners.map(w => w.id);
+          
           cycleResetOccurred = true;
       } else {
           const shuffled = [...availableInCycle].sort(() => 0.5 - Math.random());
           winners = shuffled.slice(0, 10);
-          winners.forEach(w => newCycleHistory.push(w.id));
       }
 
+      // IMPORTANTE: Solo actualizamos el estado VISUAL del sorteo.
+      // NO actualizamos 'cycleHistory' todavía. Eso se hace al guardar.
       setRaffleWinners(winners);
-      setCycleHistory(newCycleHistory);
       setWinnersStatus({});
       setReserveWinners([]);
       setWasCycleResetInCurrentRaffle(cycleResetOccurred);
       
-      // PERSISTIR TODO
+      // Persistimos el sorteo activo (temporal)
       persistState({
-          cycleHistory: newCycleHistory,
+          // NO guardamos cycleHistory aquí para no quemar a los socios si repetimos sorteo
           activeRaffle: {
               matchName,
               winners,
               winnersStatus: {},
-              reserveList, // Mantener lista si había
+              reserveList,
               reserveWinners: [],
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              isCycleReset: cycleResetOccurred
           }
       });
       
-      if (cycleResetOccurred) alert("ℹ️ CICLO COMPLETADO: Reinicio de exclusiones.");
+      if (cycleResetOccurred) alert("ℹ️ CICLO COMPLETADO: Se reiniciarán las exclusiones al guardar esta jornada.");
   };
 
   const updateWinnerStatus = (memberId: string, status: WinnerStatus) => {
       const newStatus = { ...winnersStatus, [memberId]: winnersStatus[memberId] === status ? 'pending' : status };
       setWinnersStatus(newStatus);
-      // Persistir solo el cambio de estado (lo demás igual)
       persistState({ 
           activeRaffle: { 
               matchName, winners: raffleWinners, reserveList, reserveWinners, timestamp: Date.now(),
-              winnersStatus: newStatus 
+              winnersStatus: newStatus,
+              isCycleReset: wasCycleResetInCurrentRaffle
           } 
       });
   };
@@ -364,13 +387,12 @@ const Dashboard: React.FC = () => {
   
   const handleCloseMatchday = () => {
       if (!matchName.trim() || raffleWinners.length === 0) return;
-      if (!window.confirm("¿Cerrar jornada y guardar en Historial?")) return;
+      if (!window.confirm("¿Cerrar jornada y guardar en Historial?\n\nEsta acción marcará a los socios premiados y los excluirá de próximos sorteos.")) return;
 
       const newRecord: MatchHistoryRecord = {
           id: Date.now().toString(),
           date: Date.now(),
           matchName: matchName,
-          // Guardamos la temporada actual y si hubo reset
           season: CURRENT_SEASON,
           isCycleReset: wasCycleResetInCurrentRaffle,
           winners: [...raffleWinners], 
@@ -379,6 +401,13 @@ const Dashboard: React.FC = () => {
       
       const newHistory = [newRecord, ...matchHistory];
       setMatchHistory(newHistory);
+      
+      // --- PUNTO CRÍTICO: AQUÍ ACTUALIZAMOS EL HISTORIAL DE CICLOS ---
+      // Usamos la función reconstructora para asegurar integridad total
+      const updatedCycleHistory = reconstructCycleHistory(newHistory);
+      setCycleHistory(updatedCycleHistory);
+
+      // Limpiamos mesa
       setMatchName('');
       setRaffleWinners([]);
       setReserveList([]);
@@ -386,12 +415,14 @@ const Dashboard: React.FC = () => {
       setWinnersStatus({});
       setWasCycleResetInCurrentRaffle(false);
 
+      // Guardamos todo de forma definitiva
       persistState({
           matchHistory: newHistory,
-          activeRaffle: null // Limpiamos el sorteo activo
+          cycleHistory: updatedCycleHistory,
+          activeRaffle: null 
       });
 
-      alert("✅ Jornada cerrada.");
+      alert("✅ Jornada cerrada y socios actualizados.");
       setCurrentTab('history');
   };
 
@@ -404,7 +435,8 @@ const Dashboard: React.FC = () => {
           persistState({
               activeRaffle: {
                   matchName, winners: raffleWinners, winnersStatus, reserveWinners, timestamp: Date.now(),
-                  reserveList: newList
+                  reserveList: newList,
+                  isCycleReset: wasCycleResetInCurrentRaffle
               }
           });
       }
@@ -416,7 +448,8 @@ const Dashboard: React.FC = () => {
       persistState({
           activeRaffle: {
                 matchName, winners: raffleWinners, winnersStatus, reserveWinners, timestamp: Date.now(),
-                reserveList: newList
+                reserveList: newList,
+                isCycleReset: wasCycleResetInCurrentRaffle
           }
       });
   };
@@ -429,7 +462,8 @@ const Dashboard: React.FC = () => {
       persistState({
           activeRaffle: {
               matchName, winners: raffleWinners, winnersStatus, reserveList, timestamp: Date.now(),
-              reserveWinners: winners
+              reserveWinners: winners,
+              isCycleReset: wasCycleResetInCurrentRaffle
           }
       });
   };
@@ -437,23 +471,16 @@ const Dashboard: React.FC = () => {
   const handleFullReset = async () => {
       if (!window.confirm("⚠️ ¿RESET COMPLETO? (Borrará asignaciones)")) return;
       setLoading(true);
-      
       try {
-          // 1. Limpiar estado
           setAssignments({});
           const now = Date.now();
           setLastResetTime(now);
-          
-          // 2. Recargar socios
           const data = await fetchMembers();
           setAllMembers(data);
-          
-          // 3. Persistir limpieza
           await persistState({
               assignments: {},
               lastResetTime: now
           });
-          
       } catch (e) {
           console.error(e);
       } finally {
@@ -482,7 +509,7 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  // --- Handlers UI Auxiliares (sin cambios lógicos profundos) ---
+  // --- Handlers UI Auxiliares ---
   const handleCopyRaffleImage = async () => {
       const node = document.getElementById('raffle-card');
       if (!node) return;
@@ -536,14 +563,12 @@ const Dashboard: React.FC = () => {
     historySearchTerm && (m.name.toLowerCase().includes(historySearchTerm.toLowerCase()) || m.id.toLowerCase().includes(historySearchTerm.toLowerCase()))
   ).slice(0, 5);
   
-  // Helpers para filtro de temporada
   const availableSeasons = useMemo(() => {
     const seasons = new Set<string>();
     matchHistory.forEach(r => {
         if (r.season) seasons.add(r.season);
         else seasons.add('Anteriores');
     });
-    // Asegurar que siempre esté la actual aunque no haya partidos
     seasons.add(CURRENT_SEASON);
     return Array.from(seasons).sort().reverse();
   }, [matchHistory]);
@@ -679,8 +704,6 @@ const Dashboard: React.FC = () => {
                     <input type="text" placeholder="Ej: Dépor vs Celta" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-brand/20 transition-all font-medium" value={matchName} 
                         onChange={(e) => {
                             setMatchName(e.target.value);
-                            // Sincronización "lenta" (solo guarda si hay ganadores o si paramos de escribir) puede ser compleja.
-                            // Para simplificar, aquí no guardamos en cada tecla, solo al ejecutar acciones.
                         }}
                     />
                     <div className="grid grid-cols-3 gap-3">
@@ -729,7 +752,7 @@ const Dashboard: React.FC = () => {
                         <div className="flex gap-2">
                             <button onClick={() => { if(window.confirm("¿Repetir sorteo? Se perderán los resultados.")) { setRaffleWinners([]); persistState({ activeRaffle: null }); } }} className="flex-1 py-3 text-gray-500 font-bold text-xs hover:bg-gray-50 rounded-xl border border-gray-200"><RotateCcw className="w-3 h-3 inline mr-1" /> Repetir</button>
                             <button onClick={transferWinnersToSlots} className="flex-[2] py-3 bg-depor-blue text-white font-bold text-sm rounded-xl hover:bg-blue-700 shadow-md flex items-center justify-center gap-2"><ArrowRightCircle className="w-4 h-4" /> Asignar</button>
-                             <button type="button" onClick={handleCloseMatchday} className="w-12 py-3 bg-gray-800 text-white rounded-xl hover:bg-black shadow-md flex items-center justify-center"><Save className="w-4 h-4" /></button>
+                             <button type="button" onClick={handleCloseMatchday} className="w-12 py-3 bg-gray-800 text-white rounded-xl hover:bg-black shadow-md flex items-center justify-center" title="Guardar y Cerrar Jornada"><Save className="w-4 h-4" /></button>
                         </div>
                     </div>
                 )}

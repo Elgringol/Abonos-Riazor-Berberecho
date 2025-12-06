@@ -19,6 +19,7 @@ export interface AppState {
         reserveList: Member[];
         reserveWinners: Member[];
         timestamp: number;
+        isCycleReset?: boolean; // Indicates if this specific raffle triggered a cycle reset
     } | null;
 }
 
