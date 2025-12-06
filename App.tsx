@@ -5,7 +5,7 @@ import { loadCloudData, saveCloudData, AppState, CLOUD_API_URL } from './service
 import { Member, MatchHistoryRecord } from './types';
 import { generateWhatsAppLink } from './utils';
 import CardCanvas from './components/CardCanvas';
-import { Search, Share2, CheckCircle, RefreshCw, XCircle, Eye, Send, Download, Pencil, UserPlus, Users, RotateCcw, AlertTriangle, Trophy, Ticket, ClipboardList, Shuffle, ArrowRightCircle, Calendar, Check, X, MessageCircle, History, Archive, Save, User, Cloud, CloudOff, CloudLightning, Filter, Crown, RefreshCcw, ChevronDown } from 'lucide-react';
+import { Search, Share2, CheckCircle, RefreshCw, XCircle, Eye, Send, Download, Pencil, UserPlus, Users, RotateCcw, AlertTriangle, Trophy, Ticket, ClipboardList, Shuffle, ArrowRightCircle, Calendar, Check, X, MessageCircle, History, Archive, Save, User, Cloud, CloudOff, CloudLightning, RefreshCcw } from 'lucide-react';
 
 // --- Constantes Visuales ---
 const LOGO_ID = "10m8lfNupdyr8st5zXKE5xobx-NsciILT";
