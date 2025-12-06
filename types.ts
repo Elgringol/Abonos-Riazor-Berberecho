@@ -18,3 +18,13 @@ export interface CardData {
 export interface GoogleSheetConfig {
   url: string;
 }
+
+export interface MatchHistoryRecord {
+  id: string;
+  date: number;
+  matchName: string;
+  season?: string; // Ej: "24/25", "25/26"
+  isCycleReset?: boolean; // Indicates if the exclusion cycle was reset during this raffle
+  winners: Member[];
+  reserves: Member[];
+}
