@@ -5,7 +5,7 @@ import { loadCloudData, saveCloudData, AppState, CLOUD_API_URL } from './service
 import { Member, MatchHistoryRecord } from './types';
 import { generateWhatsAppLink } from './utils';
 import CardCanvas from './components/CardCanvas';
-import { Search, Share2, CheckCircle, RefreshCw, XCircle, Eye, Send, Download, Pencil, UserPlus, Users, RotateCcw, AlertTriangle, Trophy, Ticket, ClipboardList, Shuffle, ArrowRightCircle, Calendar, Check, X, MessageCircle, History, Archive, Save, User, Cloud, CloudOff, CloudLightning, RefreshCcw } from 'lucide-react';
+import { Search, Share2, CheckCircle, RefreshCw, XCircle, Eye, Send, Download, Pencil, UserPlus, Users, RotateCcw, AlertTriangle, Trophy, Ticket, ClipboardList, Shuffle, ArrowRightCircle, Calendar, Check, X, MessageCircle, History, Archive, Save, User, Cloud, CloudOff, CloudLightning, RefreshCcw, Link } from 'lucide-react';
 
 // --- Constantes Visuales ---
 const LOGO_ID = "10m8lfNupdyr8st5zXKE5xobx-NsciILT";
@@ -47,12 +47,25 @@ const getFirstName = (fullName: string) => {
 };
 
 const generateLinkForMember = (member: Member, referenceTimestamp?: number, slotId?: number): string => {
-    const baseUrl = window.location.href.split('#')[0].split('?')[0];
+    // Generación Robusta de URL:
+    // Usamos origin + pathname para obtener la base limpia (ej: https://midominio.com/app/)
+    // Fallback manual por si origin no está disponible.
+    let baseUrl = "";
+    if (window.location.origin && window.location.origin !== 'null') {
+         baseUrl = `${window.location.origin}${window.location.pathname}`;
+    } else {
+         baseUrl = window.location.href.split('#')[0].split('?')[0];
+    }
+    
+    // Aseguramos que no queden dobles barras al final si pathname tiene una
+    baseUrl = baseUrl.replace(/\/$/, '');
+
     const params = new URLSearchParams();
     params.set('id', member.id);
     if (referenceTimestamp) params.set('t', referenceTimestamp.toString());
     if (slotId) params.set('slot', slotId.toString());
-    return `${baseUrl}#/view?${params.toString()}`;
+    
+    return `${baseUrl}/#/view?${params.toString()}`;
 };
 
 const getWhatsAppMessage = (member: Member, link: string) => {
@@ -74,11 +87,24 @@ ${link}
     return generateWhatsAppLink(member.phone, message);
 };
 
+const getRaffleWinnerMessage = (member: Member, matchName: string) => {
+    const firstName = getFirstName(member.name);
+    const message = `👋 Hola *${firstName.toUpperCase()}*,
+
+🎉 Te informamos que has sido agraciado con un abono para presenciar el encuentro *${matchName.toUpperCase()}*.
+
+⚠️ En caso de querer asistir debes confirmarlo respondiendo a este mensaje antes de las *15:00 H del Jueves previo al partido*, a partir de ese momento pasará a disposición de un socio reserva.
+
+📲 Puede seguir todos los sorteos y noticias de la Peña uniéndose a nuestro Canal: https://whatsapp.com/channel/0029Vat7ZB0Id7nS4Ri1L825`;
+    return generateWhatsAppLink(member.phone, message);
+};
+
 const downloadCardImage = async (elementId: string, fileName: string) => {
     const node = document.getElementById(elementId);
     if (!node) return;
     try {
-        const dataUrl = await toPng(node, { cacheBust: true, pixelRatio: 2 });
+        // Removed cacheBust: true to avoid CORS issues
+        const dataUrl = await toPng(node, { pixelRatio: 2 });
         const link = document.createElement('a');
         link.download = `${fileName}.png`;
         link.href = dataUrl;
@@ -514,7 +540,8 @@ const Dashboard: React.FC = () => {
       const node = document.getElementById('raffle-card');
       if (!node) return;
       try {
-          const blob = await toBlob(node, { cacheBust: true, pixelRatio: 2 });
+          // Removed cacheBust: true to avoid CORS issues
+          const blob = await toBlob(node, { pixelRatio: 2 });
           if (!blob) return;
           try {
               await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
@@ -526,6 +553,17 @@ const Dashboard: React.FC = () => {
               link.click();
           }
       } catch (e) { console.error(e); }
+  };
+
+  const handleCopyLink = async (member: Member, slotId: number) => {
+      const link = generateLinkForMember(member, lastResetTime, slotId);
+      try {
+          await navigator.clipboard.writeText(link);
+          alert("✅ Enlace copiado al portapapeles");
+      } catch (err) {
+          console.error("Error al copiar", err);
+          alert("❌ No se pudo copiar el enlace");
+      }
   };
 
   const openAssignmentModal = (slotId: number) => {
@@ -744,7 +782,7 @@ const Dashboard: React.FC = () => {
                                         <button onClick={() => updateWinnerStatus(w.id, 'confirmed')} className={`w-8 h-full rounded-lg flex items-center justify-center transition-all ${winnersStatus[w.id] === 'confirmed' ? 'bg-green-500 text-white' : 'text-gray-300 hover:text-green-500'}`}><Check className="w-4 h-4" /></button>
                                         <button onClick={() => updateWinnerStatus(w.id, 'rejected')} className={`w-8 h-full rounded-lg flex items-center justify-center transition-all ${winnersStatus[w.id] === 'rejected' ? 'bg-red-500 text-white' : 'text-gray-300 hover:text-red-500'}`}><X className="w-4 h-4" /></button>
                                         <div className="w-[1px] h-4 bg-gray-200 mx-1"></div>
-                                        <a href={getWhatsAppMessage(w, generateLinkForMember(w, lastResetTime))} target="_blank" rel="noreferrer" className="w-8 h-full rounded-lg flex items-center justify-center text-green-600 hover:bg-green-50"><MessageCircle className="w-4 h-4" /></a>
+                                        <a href={getRaffleWinnerMessage(w, matchName)} target="_blank" rel="noreferrer" className="w-8 h-full rounded-lg flex items-center justify-center text-green-600 hover:bg-green-50"><MessageCircle className="w-4 h-4" /></a>
                                     </div>
                                 ))}
                             </div>
@@ -802,7 +840,18 @@ const Dashboard: React.FC = () => {
                         <div className="flex items-center gap-2 mb-3"><span className="text-xs font-bold text-gray-500 uppercase">Huecos:</span><input type="number" min="0" max="10" value={reserveSpotsNeeded} readOnly className="w-16 p-1 text-center border rounded bg-gray-100 text-gray-500 text-sm font-bold cursor-not-allowed" /></div>
                         <button onClick={runReserveRaffle} className="w-full py-2 bg-gray-800 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex justify-center gap-2"><Shuffle className="w-4 h-4" /> Sortear Reservas</button>
                         {reserveWinners.length > 0 && (
-                            <div className="mt-4 bg-green-50 border border-green-100 rounded-xl p-3"><h4 className="text-xs font-bold text-green-800 mb-2 uppercase text-center">🎉 Reservas Premiados</h4><ul className="text-sm space-y-1">{reserveWinners.map(w => <li key={w.id} className="text-green-900 font-medium flex items-center gap-2"><CheckCircle className="w-3 h-3" /> {w.name}</li>)}</ul></div>
+                            <div className="mt-4 bg-green-50 border border-green-100 rounded-xl p-3">
+                                <h4 className="text-xs font-bold text-green-800 mb-2 uppercase text-center">🎉 RESERVAS PREMIADOS - {matchName}</h4>
+                                <ul className="text-sm space-y-1">
+                                    {reserveWinners.map(w => (
+                                        <li key={w.id} className="text-green-900 font-medium flex items-center gap-2">
+                                            <CheckCircle className="w-3 h-3 shrink-0" />
+                                            <span className="font-mono font-bold text-xs bg-white border border-green-200 text-green-700 px-1 py-0.5 rounded w-9 text-center shrink-0 shadow-sm">{w.id}</span>
+                                            <span className="truncate">{w.name}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         )}
                     </div>
                 )}
@@ -948,19 +997,41 @@ const Dashboard: React.FC = () => {
               </div>
           </div>
       )}
-      {/* ... QuickShare y PreviewModals se mantienen igual ... */}
+      
       {(quickShareData || selectedPreviewData) && (
         <div className="fixed inset-0 bg-neutral-900/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4">
              {/* Componentes visuales reutilizados del código original, solo cambian los datos de entrada */}
              <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
                 <button onClick={() => {closeQuickShare(); closePreview();}} className="absolute right-4 top-4 text-gray-400"><XCircle className="w-6 h-6" /></button>
+                
                 <div id={`popup-card`} className="mb-4 flex justify-center">
-                    <CardCanvas memberId={(quickShareData || selectedPreviewData)!.member.id} memberName={(quickShareData || selectedPreviewData)!.member.name} imageUrl={(quickShareData || selectedPreviewData)!.imageUrl} referenceTimestamp={lastResetTime} />
+                    <CardCanvas 
+                        memberId={(quickShareData || selectedPreviewData)!.member.id} 
+                        memberName={(quickShareData || selectedPreviewData)!.member.name} 
+                        imageUrl={(quickShareData || selectedPreviewData)!.imageUrl} 
+                        referenceTimestamp={lastResetTime} 
+                    />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                     <a href={getWhatsAppMessage((quickShareData || selectedPreviewData)!.member, generateLinkForMember((quickShareData || selectedPreviewData)!.member, lastResetTime, (quickShareData || selectedPreviewData)!.slotId))} target="_blank" rel="noreferrer" className="bg-[#25D366] text-white font-bold py-2 px-2 rounded-lg text-center text-xs flex items-center justify-center gap-2"><Send className="w-4 h-4" /> WhatsApp</a>
-                     <button onClick={() => downloadCardImage(`popup-card`, `Abono`)} className="bg-gray-800 text-white font-bold py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-2"><Download className="w-4 h-4" /> Descargar</button>
-                </div>
+
+                {/* LOGIC FOR BUTTONS */}
+                {selectedPreviewData && (
+                    <div className="w-full">
+                         <button onClick={() => downloadCardImage(`popup-card`, `Abono_${selectedPreviewData.member.name}`)} className="w-full bg-gray-800 text-white font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-black transition-all">
+                            <Download className="w-4 h-4" /> Descargar Imagen
+                         </button>
+                    </div>
+                )}
+
+                {quickShareData && (
+                    <div className="grid grid-cols-2 gap-3">
+                         <a href={getWhatsAppMessage(quickShareData.member, generateLinkForMember(quickShareData.member, lastResetTime, quickShareData.slotId))} target="_blank" rel="noreferrer" className="bg-[#25D366] text-white font-bold py-3 px-4 rounded-xl text-center text-sm flex items-center justify-center gap-2 hover:bg-[#20bd5a] transition-all">
+                            <Send className="w-4 h-4" /> WhatsApp
+                         </a>
+                         <button onClick={() => handleCopyLink(quickShareData.member, quickShareData.slotId)} className="bg-blue-50 text-depor-blue border border-blue-100 font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-blue-100 transition-all">
+                            <Link className="w-4 h-4" /> Copiar Enlace
+                         </button>
+                    </div>
+                )}
              </div>
         </div>
       )}

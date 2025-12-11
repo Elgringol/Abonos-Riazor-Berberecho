@@ -165,6 +165,10 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
                 <img 
                     src={currentSrc}
                     alt="Abono"
+                    // IMPORTANT: Allow cross-origin access for html-to-image to work.
+                    // If the server doesn't support it (e.g. some direct Google links), 
+                    // onError will trigger and we'll fallback to the Proxy which does support it.
+                    crossOrigin="anonymous"
                     className={`w-full h-auto block transition-all duration-700 ${imageState === 'success' ? 'opacity-100' : 'opacity-0'}`}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
