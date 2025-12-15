@@ -659,8 +659,37 @@ const Dashboard: React.FC = () => {
                 return (
                     <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100 shadow-sm animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex justify-between items-start mb-4"><div className="flex items-center gap-3"><div className="w-12 h-12 rounded-full bg-depor-blue text-white flex items-center justify-center font-bold text-lg"><User className="w-6 h-6" /></div><div><h3 className="font-bold text-gray-900 leading-tight">{selectedHistoryMember.name}</h3><p className="text-xs text-gray-500 font-mono mt-0.5">ID: {selectedHistoryMember.id}</p></div></div><button onClick={() => setSelectedHistoryMember(null)} className="text-gray-400 hover:text-gray-600"><XCircle className="w-5 h-5"/></button></div>
-                        <div className="grid grid-cols-2 gap-3 mb-4"><div className="bg-white p-3 rounded-xl border border-blue-100 shadow-sm"><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Ganador</p><p className="text-2xl font-black text-depor-blue">{stats.wins.length + stats.importedWins.length}</p></div><div className="bg-white p-3 rounded-xl border border-blue-100 shadow-sm"><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Reserva</p><p className="text-2xl font-black text-gray-500">{stats.reserves.length}</p></div></div>
-                        <div className="space-y-2">{stats.wins.map((r: MatchHistoryRecord) => <span key={r.id} className="inline-block mr-2 mb-2 text-[10px] bg-green-100 text-green-800 px-2 py-1 rounded-md font-bold border border-green-200">{r.matchName}</span>)}{stats.importedWins.map((w, i) => <span key={i} className="inline-block mr-2 mb-2 text-[10px] bg-purple-100 text-purple-800 px-2 py-1 rounded-md font-bold border border-purple-200">{w}</span>)}</div>
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Columna Premiado */}
+                            <div className="flex flex-col gap-2">
+                                <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-sm text-center">
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Premiado</p>
+                                    <p className="text-3xl font-black text-depor-blue">{stats.wins.length + stats.importedWins.length}</p>
+                                </div>
+                                <div>
+                                    <span className="block text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded w-fit mb-1">PREMIADO</span>
+                                    <div className="flex flex-wrap gap-1 content-start">
+                                        {stats.wins.map((r: MatchHistoryRecord) => <span key={r.id} className="text-[10px] bg-green-100 text-green-800 px-2 py-1 rounded-md font-bold border border-green-200">{r.matchName}</span>)}
+                                        {stats.importedWins.map((w, i) => <span key={i} className="text-[10px] bg-purple-100 text-purple-800 px-2 py-1 rounded-md font-bold border border-purple-200">{w}</span>)}
+                                        {(stats.wins.length === 0 && stats.importedWins.length === 0) && <span className="text-[10px] text-gray-400 italic">Ninguna</span>}
+                                    </div>
+                                </div>
+                            </div>
+                            {/* Columna Reserva */}
+                            <div className="flex flex-col gap-2">
+                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm text-center">
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Reserva</p>
+                                    <p className="text-3xl font-black text-gray-500">{stats.reserves.length}</p>
+                                </div>
+                                <div>
+                                    <span className="block text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded w-fit mb-1">RESERVAS</span>
+                                    <div className="flex flex-wrap gap-1 content-start">
+                                        {stats.reserves.map((r: MatchHistoryRecord) => <span key={r.id} className="text-[10px] bg-gray-100 text-gray-700 px-2 py-1 rounded-md font-bold border border-gray-200">{r.matchName}</span>)}
+                                        {stats.reserves.length === 0 && <span className="text-[10px] text-gray-400 italic">Ninguna</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 );
             })()}
@@ -677,12 +706,17 @@ const Dashboard: React.FC = () => {
                         </div>
                     </div>
                     <div className="p-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {record.winners.map((w, i) => (<div key={w.id} className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl p-2 shadow-sm hover:border-depor-blue/30 transition-colors"><div className="w-6 h-6 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center font-bold text-xs shadow-sm border border-orange-100 shrink-0">{i+1}</div><div className="min-w-0"><p className="font-bold text-gray-800 text-sm truncate">{w.name}</p><p className="text-[10px] text-gray-400 font-mono">ID: {w.id}</p></div></div>))}
+                        {/* Ganadores: Fondo destacado y bordes visibles */}
+                        <div className="bg-orange-50/40 rounded-xl p-3 border border-orange-100 mb-3">
+                            <h4 className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-2">Ganadores</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {record.winners.map((w, i) => (<div key={w.id} className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-2 shadow-sm hover:border-depor-blue/30 transition-colors"><div className="w-6 h-6 rounded-full bg-depor-blue text-white flex items-center justify-center font-bold text-xs shadow-sm border border-blue-700 shrink-0">{i+1}</div><div className="min-w-0"><p className="font-bold text-gray-800 text-sm truncate">{w.name}</p><p className="text-[10px] text-gray-400 font-mono">ID: {w.id}</p></div></div>))}
+                            </div>
                         </div>
+                        
+                        {/* Reservas: Visualización más discreta */}
+                        {record.reserves && record.reserves.length > 0 && (<div className="px-1"><h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1 opacity-70"><ClipboardList className="w-3 h-3" /> Reservas</h4><div className="flex flex-wrap gap-2">{record.reserves.map((r) => (<div key={r.id} className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 px-2 py-1 rounded text-[10px] text-gray-500"><div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div><span className="font-medium truncate max-w-[120px]">{r.name}</span></div>))}</div></div>)}
                     </div>
-                    {/* Visualización de Reservas en Historial */}
-                    {record.reserves && record.reserves.length > 0 && (<div className="bg-gray-50 border-t border-gray-100 px-4 py-3"><h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1 opacity-70"><ClipboardList className="w-3 h-3" /> Reservas / Lista de Espera</h4><div className="flex flex-wrap gap-2">{record.reserves.map((r) => (<div key={r.id} className="flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1 rounded text-[10px] text-gray-500"><div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div><span className="font-medium truncate max-w-[120px]">{r.name}</span></div>))}</div></div>)}
                 </div>
             ))}
             {filteredHistory.length === 0 && (<div className="text-center py-10 opacity-50"><History className="w-12 h-12 mx-auto text-gray-300 mb-2" /><p className="text-gray-400 font-medium text-sm">No hay partidos en esta temporada.</p></div>)}
