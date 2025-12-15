@@ -1,206 +1,175 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { Loader2, Clock } from 'lucide-react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { Loader2, Clock, WifiOff, RefreshCw } from 'lucide-react';
 
 interface CardCanvasProps {
   memberId: string;
   memberName: string;
   imageUrl?: string;
-  referenceTimestamp?: number; // Optional: If provided, expiration is calculated from this time
+  referenceTimestamp?: number;
+  seatInfo?: string; // Mantenemos la prop por compatibilidad, aunque no se renderice visualmente
 }
 
 const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl, referenceTimestamp }) => {
-  const [imageState, setImageState] = useState<'loading' | 'success' | 'error'>('loading');
-  const [currentCandidateIndex, setCurrentCandidateIndex] = useState(0);
+  // Estados de carga: 'idle' | 'loading' | 'success' | 'error'
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
 
-  // Logo de la Peña para MARCA DE AGUA
+  // --- LOGO PEÑA (Marca de Agua) ---
   const PENA_LOGO_ID = "17pNVMd42F6pDU7LOCPjPZ-xrUckcYNMe";
-  
-  // ESTRATEGIA DE RESPALDO (FALLBACK) PARA MARCA DE AGUA - SOLUCIÓN BUG VISUALIZACIÓN
-  // Fuente original (Thumbnail API es más permisiva y rápida que export=view)
-  const WM_SOURCE_URL = `https://drive.google.com/thumbnail?id=${PENA_LOGO_ID}&sz=w1000`;
-  
-  // 1. Primary: Proxy (Weserv). Vital para descargar la imagen (CORS) y transparencia PNG.
-  // Usamos la fuente thumbnail para alimentar al proxy.
-  const WM_PRIMARY = `https://wsrv.nl/?url=${encodeURIComponent(WM_SOURCE_URL)}&output=png`;
-  
-  // 2. Fallback: Directo.
-  const WM_FALLBACK = WM_SOURCE_URL;
+  // Usamos CDN rápido para la marca de agua también para evitar cuellos de botella
+  const WM_SRC = `https://wsrv.nl/?url=${encodeURIComponent(`https://drive.google.com/thumbnail?id=${PENA_LOGO_ID}&sz=w600`)}&output=png&il`;
 
-  const [watermarkSrc, setWatermarkSrc] = useState<string>(WM_PRIMARY);
-  const [isWatermarkFallback, setIsWatermarkFallback] = useState(false);
-
-  const handleWatermarkError = () => {
-    // Si falla el proxy, cambiamos automáticamente al enlace directo
-    if (!isWatermarkFallback) {
-        console.warn("Proxy de marca de agua falló. Cambiando a enlace directo (Fallback) y desactivando CORS.");
-        setWatermarkSrc(WM_FALLBACK);
-        setIsWatermarkFallback(true);
-    }
-  };
-
-  // ---------------------------------------------------------
-  // EXPIRATION DATE LOGIC (Security Feature)
-  // ---------------------------------------------------------
+  // --- FECHA CADUCIDAD ---
   const expirationString = useMemo(() => {
-    // If a reference timestamp is provided (from the "Reset" button), use it.
-    // Otherwise, fallback to current time (dynamic).
     const date = referenceTimestamp ? new Date(referenceTimestamp) : new Date();
-    
-    // Add 96 hours (4 days)
-    date.setHours(date.getHours() + 96);
-    
-    // Format: DD/MM (Sin hora)
+    date.setHours(date.getHours() + 96); // 4 días de validez
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    
     return `${day}/${month}`;
   }, [referenceTimestamp]);
 
-  // ---------------------------------------------------------
-  // ROBUST IMAGE STRATEGY: CASCADE LOADING (Optimized for Speed)
-  // ---------------------------------------------------------
-  const imageCandidates = useMemo(() => {
+  // --- ESTRATEGIA DE URLS REDUNDANTES ("HYDRA") ---
+  // Generamos 3 rutas de acceso diferentes para la misma imagen.
+  const sourceUrls = useMemo(() => {
     if (!imageUrl) return [];
 
-    // Extract Drive ID if present
+    // Extraer ID de Drive si es posible
     const driveIdMatch = imageUrl.match(/\/d\/([^/]+)|id=([^&]+)/);
     const driveId = driveIdMatch ? (driveIdMatch[1] || driveIdMatch[2]) : null;
 
+    // URL Limpia para los proxies (quitando parámetros extra si los hubiera)
+    const cleanUrl = imageUrl.split('&')[0]; 
+    
+    // Si no es drive, estrategia estándar
     if (!driveId) {
         return [
-            imageUrl,
-            `https://wsrv.nl/?url=${encodeURIComponent(imageUrl)}&w=800&q=80&output=webp`
+            `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&w=800&output=jpg&q=85&il`, // CDN 1
+            `https://images.weserv.nl/?url=${encodeURIComponent(cleanUrl)}&w=800&output=jpg&q=85`, // CDN 2
+            imageUrl // Directo
         ];
     }
 
-    const directLink = `https://drive.google.com/uc?export=view&id=${driveId}`;
-    
-    return [
-        // 1. GOOGLE THUMBNAIL API (FASTEST & MOST STABLE) - High Res
-        // Using w4000 (4K resolution) to ensure maximum sharpness for barcodes while maintaining speed.
-        `https://drive.google.com/thumbnail?id=${driveId}&sz=w4000`,
+    // URL Directa de Thumbnail de Google (fuente original)
+    // Pedimos w1200 para asegurar MÁXIMA calidad para el código de barras en la fuente original
+    const googleThumbUrl = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`; 
 
-        // 2. PROXY (Optimized WebP as backup)
-        `https://wsrv.nl/?url=${encodeURIComponent(directLink)}&w=800&q=80&output=webp`,
+    return [
+        // 1. PRIORIDAD: wsrv.nl (Cloudflare Edge Cache). 
+        // Absorbe el tráfico masivo. Si 10 entran, 9 tiran de caché.
+        `https://wsrv.nl/?url=${encodeURIComponent(googleThumbUrl)}&w=800&output=jpg&q=90&il&n=-1`,
         
-        // 3. DIRECT EXPORT (Last resort, slowest)
-        directLink
+        // 2. RESPALDO: weserv.nl (Otro servicio de caché independiente)
+        // Por si wsrv.nl se cae o bloquea.
+        `https://images.weserv.nl/?url=${encodeURIComponent(googleThumbUrl)}&w=800&output=jpg&q=90`,
+        
+        // 3. EMERGENCIA: Directo a Google
+        // Solo llegamos aquí si los dos CDNs fallan o Google bloquea a los proxys.
+        googleThumbUrl
     ];
   }, [imageUrl]);
 
-  const currentSrc = imageCandidates[currentCandidateIndex];
+  const currentSrc = sourceUrls[currentSourceIndex];
 
-  // Reset when input changes
+  // Reiniciar estados si cambia la imagen prop
   useEffect(() => {
     if (imageUrl) {
-        setImageState('loading');
-        setCurrentCandidateIndex(0);
+        setLoadStatus('loading');
+        setCurrentSourceIndex(0);
     } else {
-        setImageState('error');
+        setLoadStatus('error');
     }
-  }, [imageUrl]);
+  }, [imageUrl, retryCount]); // retryCount permite forzar re-render
 
   const handleImageError = () => {
-    if (currentCandidateIndex < imageCandidates.length - 1) {
-        console.log(`Image source ${currentCandidateIndex} failed. Trying next candidate...`);
-        setCurrentCandidateIndex(prev => prev + 1);
+    console.warn(`Fallo cargando fuente ${currentSourceIndex}: ${currentSrc}`);
+    
+    if (currentSourceIndex < sourceUrls.length - 1) {
+        // Intentar siguiente fuente inmediatamente (Estrategia Hydra)
+        setCurrentSourceIndex(prev => prev + 1);
     } else {
-        setImageState('error');
+        // Se acabaron las fuentes
+        setLoadStatus('error');
     }
   };
 
   const handleImageLoad = () => {
-      setImageState('success');
+      setLoadStatus('success');
   };
 
-  // ---------------------------------------------------------
-  // SVG FALLBACK GENERATOR
-  // ---------------------------------------------------------
-  const svgFallbackUrl = useMemo(() => {
-    const width = 600;
-    const height = 900; 
-    
-    const svgString = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
-        <defs>
-          <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#004899;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#002a5c;stop-opacity:1" />
-          </linearGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grad1)"/>
-        <text x="300" y="300" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="34" fill="white">Imagen no disponible</text>
-        <text x="300" y="350" text-anchor="middle" font-family="Arial" font-size="24" fill="white" opacity="0.7">Pase Digital de Respaldo</text>
-        
-        <!-- Mock Barcode Area -->
-        <rect x="50" y="750" width="500" height="100" fill="white"/>
-      </svg>
-    `;
-    return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgString)))}`;
+  const handleManualRetry = useCallback(() => {
+      setLoadStatus('loading');
+      setCurrentSourceIndex(0);
+      setRetryCount(prev => prev + 1); // Forzar efecto
   }, []);
 
-
-  // ---------------------------------------------------------
-  // RENDER
-  // ---------------------------------------------------------
   return (
-    <div id={`card-${memberId}`} className="relative w-full max-w-[340px] mx-auto perspective-1000 bg-white">
+    <div id={`card-${memberId}`} className="relative w-full max-w-[340px] mx-auto bg-white select-none">
       
-      {/* CARD CONTAINER */}
-      <div className="relative overflow-hidden rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-white transition-transform duration-500 hover:scale-[1.01] flex flex-col min-h-[200px]">
+      {/* CONTENEDOR PRINCIPAL */}
+      <div className="relative overflow-hidden rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-white flex flex-col min-h-[480px]">
         
-        {/* 1. IMAGE AREA */}
-        <div className="relative w-full bg-gray-100">
+        {/* ZONA DE IMAGEN */}
+        <div className="relative w-full h-full bg-gray-900 flex-1 min-h-[480px] flex items-center justify-center">
             
-            {/* A. LOADING INDICATOR */}
-            {imageState === 'loading' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10 min-h-[400px]">
-                    <Loader2 className="w-8 h-8 animate-spin text-depor-blue mb-2" />
-                    <p className="text-xs font-semibold text-gray-400">Cargando abono...</p>
+            {/* SPINNER DE CARGA */}
+            {loadStatus === 'loading' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 z-20">
+                    <Loader2 className="w-10 h-10 animate-spin text-depor-blue mb-3" />
+                    <p className="text-xs font-bold text-gray-500 animate-pulse">
+                        {currentSourceIndex === 0 ? "Cargando pase seguro..." : "Conectando servidor de respaldo..."}
+                    </p>
                 </div>
             )}
 
-            {/* B. THE IMAGE - Natural Height */}
-            {currentSrc && (
+            {/* IMAGEN DEL ABONO (El núcleo del acceso) */}
+            {currentSrc && loadStatus !== 'error' && (
                 <img 
                     src={currentSrc}
-                    alt="Abono"
-                    // IMPORTANT: Allow cross-origin access for html-to-image to work.
-                    // If the server doesn't support it (e.g. some direct Google links), 
-                    // onError will trigger and we'll fallback to the Proxy which does support it.
+                    alt="Abono Digital"
                     crossOrigin="anonymous"
-                    className={`w-full h-auto block transition-all duration-700 ${imageState === 'success' ? 'opacity-100' : 'opacity-0'}`}
+                    loading="eager" // Prioridad máxima
+                    // --- MODO ESCÁNER ---
+                    // contrast-125: Aumenta la diferencia entre blancos y negros (Barcode Friendly)
+                    // brightness-110: Compensa pantallas oscuras
+                    // mix-blend-normal: Asegura renderizado estándar
+                    className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-300 contrast-125 brightness-110 ${loadStatus === 'success' ? 'opacity-100' : 'opacity-0'}`}
+                    style={{ imageRendering: 'auto' }} // Permitimos suavizado para textos, pero el contraste alto ayuda al código de barras
                     onLoad={handleImageLoad}
                     onError={handleImageError}
                 />
             )}
 
-            {/* C. FALLBACK */}
-            {imageState === 'error' && (
-                <div className="flex flex-col bg-gray-800 z-10 h-[500px]">
-                    <img src={svgFallbackUrl} alt="Pase Fallback" className="w-full h-full object-cover" />
-                    <div className="absolute bottom-20 left-0 w-full px-4 text-center">
-                        <div className="bg-orange-500 text-white text-sm p-3 rounded font-bold">
-                            Imagen original no disponible
-                        </div>
-                    </div>
+            {/* PANTALLA DE ERROR FINAL (Si fallan las 3 vías) */}
+            {loadStatus === 'error' && (
+                <div className="absolute inset-0 z-30 bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
+                    <WifiOff className="w-16 h-16 text-red-500 mb-4" />
+                    <h3 className="text-white font-bold text-xl mb-2">Error de Carga</h3>
+                    <p className="text-gray-400 text-sm mb-6">
+                        No se ha podido recuperar el código de acceso.
+                    </p>
+                    <button 
+                        onClick={handleManualRetry}
+                        className="bg-white text-gray-900 font-bold py-3 px-6 rounded-xl flex items-center gap-2 hover:bg-gray-100 transition-all active:scale-95 shadow-lg"
+                    >
+                        <RefreshCw className="w-5 h-5" /> REINTENTAR AHORA
+                    </button>
+                    {/* ELIMINADO: Bloque visual de Fail-Safe (Fila/Asiento). El código de barras es mandatorio. */}
                 </div>
             )}
 
-            {/* 2. TOP DATA OVERLAY (Zona Naranja) */}
-            <div className="absolute top-0 left-0 w-full pt-6 pb-12 px-5 bg-gradient-to-b from-black/60 via-black/20 to-transparent z-30 pointer-events-none">
+            {/* 2. SUPERPOSICIÓN DE DATOS (Overlay) */}
+            {/* Se muestra siempre sobre la imagen para validar identidad visualmente */}
+            <div className="absolute top-0 left-0 w-full pt-6 pb-12 px-5 bg-gradient-to-b from-black/80 via-black/20 to-transparent z-10 pointer-events-none">
                  <div className="flex flex-col items-start w-full drop-shadow-md">
                     <h2 className="text-2xl font-black text-white leading-tight uppercase tracking-tight" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
                         {memberName}
                     </h2>
                     <div className="mt-2 w-full flex items-center justify-between">
-                        {/* ID Badge */}
                         <span className="bg-white/20 backdrop-blur-md text-white text-[11px] font-bold px-2 py-0.5 rounded border border-white/30 shadow-sm">
                             ID: {memberId}
                         </span>
-                        
-                        {/* Expiration Badge */}
-                        <span className="flex items-center gap-1 bg-orange-600/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded border border-white/20 shadow-sm animate-pulse">
+                        <span className="flex items-center gap-1 bg-orange-600/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded border border-white/20 shadow-sm">
                             <Clock className="w-3 h-3" />
                             CADUCA: {expirationString}
                         </span>
@@ -208,25 +177,25 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
                  </div>
             </div>
 
-            {/* 3. WATERMARK (Peña Logo) - ROBUST HYBRID METHOD (PROXY + DIRECT FALLBACK) */}
-            <div className="absolute top-[15%] left-0 w-full h-[40%] flex items-center justify-center pointer-events-none z-20 overflow-hidden">
-                <img 
-                    src={watermarkSrc} 
-                    onError={handleWatermarkError}
-                    alt="Marca de agua Peña" 
-                    // CRÍTICO: Si usamos el fallback directo de Google, debemos desactivar 'anonymous'
-                    // para evitar el bloqueo CORS que impide la visualización.
-                    crossOrigin={isWatermarkFallback ? undefined : "anonymous"}
-                    className="w-[40%] opacity-25 grayscale contrast-150 brightness-95 mix-blend-multiply transition-opacity duration-500"
-                />
-            </div>
+            {/* 3. MARCA DE AGUA (Solo visible si carga ok) */}
+            {loadStatus === 'success' && (
+                <div className="absolute top-[20%] left-0 w-full h-[30%] flex items-center justify-center pointer-events-none z-10 overflow-hidden mix-blend-soft-light opacity-50">
+                    <img 
+                        src={WM_SRC} 
+                        alt="" 
+                        crossOrigin="anonymous"
+                        className="w-[40%] grayscale"
+                    />
+                </div>
+            )}
             
-            {/* Scanline Animation (Subtle) */}
-            <div className="absolute top-0 w-full h-[1px] bg-white/30 shadow-[0_0_10px_rgba(255,255,255,0.4)] animate-[scan_4s_linear_infinite] pointer-events-none z-30"></div>
+            {/* EFECTO DE ESCÁNER (Línea de luz que recorre el abono) */}
+            {/* Da feedback visual de que la app está "viva" y no es una captura de pantalla */}
+            <div className="absolute top-0 w-full h-[2px] bg-white/50 shadow-[0_0_15px_rgba(255,255,255,0.8)] animate-[scan_3s_linear_infinite] pointer-events-none z-10"></div>
         </div>
         
-        {/* Security Hologram Effect Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-20 pointer-events-none z-40" style={{ mixBlendMode: 'overlay' }}></div>
+        {/* Hologram Overlay (Estética de seguridad) */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-20 pointer-events-none z-20" style={{ mixBlendMode: 'overlay' }}></div>
       </div>
       
       <p className="text-center text-[10px] text-gray-400 mt-4 font-medium uppercase tracking-widest">

@@ -43,7 +43,7 @@ export const fetchMembers = async (): Promise<Member[]> => {
             return '';
         };
 
-        // Búsqueda de IMAGEN (Ya no es estrictamente necesaria para la lógica de slots, pero se mantiene para retrocompatibilidad)
+        // Búsqueda de IMAGEN
         let imgKey = findKey(['imagen', 'foto', 'photo', 'img']);
         let rawImgUrl = imgKey ? row[imgKey] : '';
         
@@ -55,67 +55,62 @@ export const fetchMembers = async (): Promise<Member[]> => {
         }
 
         // --- LÓGICA DE DETECCIÓN DE PAGO ROBUSTA ---
-        // Buscamos cualquier columna que parezca indicar el estado de pago
         const paymentKey = findKey(['cuota', 'pagad', 'pago', 'estado', 'status', 'situacion', 'corriente', '2024']);
         const rawPaidValue = paymentKey ? row[paymentKey] : 'NO';
-        
-        // Limpiamos el valor: quitamos comillas, espacios y pasamos a mayúsculas
         const cleanPaid = rawPaidValue.replace(/["']/g, '').trim().toUpperCase();
         
-        // Lista exhaustiva de valores positivos
         const positiveValues = [
-            'SI', 'SÍ', 'S',             // Variantes básicas
-            'YES', 'Y',                  // Inglés
-            'TRUE', 'T', '1',            // Booleanos/Numéricos
-            'PAGADO', 'PAGADA',          // Explícitos
-            'OK', 'ACTIVO', 'ACTIVA',    // Estado
-            'AL CORRIENTE', 'COMPLETADO' // Frases
+            'SI', 'SÍ', 'S',             
+            'YES', 'Y',                  
+            'TRUE', 'T', '1',            
+            'PAGADO', 'PAGADA',          
+            'OK', 'ACTIVO', 'ACTIVA',    
+            'AL CORRIENTE', 'COMPLETADO' 
         ];
 
-        // Comprobación: ¿Contiene alguna de las palabras positivas?
-        // Usamos .some() para que si la celda dice "Si, pagado" también funcione
         const isPaid = positiveValues.some(val => cleanPaid === val || cleanPaid.startsWith(val));
 
-        // --- LÓGICA DE HISTORIAL COMBINADA (COLUMNAS CLÁSICAS + GANADOR/PARTIDO) ---
-        
-        // 1. Columnas tipo lista ("Historial", "Anteriores")
-        const historyKey = findKey(['historial', 'anteriores', 'ganados', 'history', 'premios']);
-        let combinedHistory = historyKey ? row[historyKey] : '';
+        // --- LÓGICA DE HISTORIAL AVANZADA (MULTICOLUMNA) ---
+        // Ahora escaneamos TODAS las columnas en busca de pistas de premios, no solo una.
+        const historySet = new Set<string>();
 
-        // 2. Nuevas columnas específicas solicitadas ("Ganador", "Partido")
-        const winnerKey = findKey(['ganador', 'winner', 'premiado']);
-        const matchKey = findKey(['partido', 'match', 'jornada', 'encuentro']);
+        keys.forEach(key => {
+            const lowerKey = key.toLowerCase();
+            const value = row[key]?.replace(/["']/g, '').trim();
+            const upperValue = value?.toUpperCase();
 
-        const matchValue = matchKey ? row[matchKey] : '';
-        const winnerValue = winnerKey ? row[winnerKey] : '';
+            if (!value) return;
 
-        // Si la columna "Partido" tiene texto, lo agregamos al historial
-        if (matchValue && matchValue.trim().length > 1) {
-             if (combinedHistory) combinedHistory += ', ';
-             combinedHistory += matchValue.trim();
-        } 
-        // Si no hay partido específico, pero la columna "Ganador" indica positivo (SI/OK/TEXTO), lo marcamos
-        else if (winnerValue) {
-             const cleanWinner = winnerValue.replace(/["']/g, '').trim().toUpperCase();
-             // Si dice SI o tiene un texto largo (ej: nombre del partido puesto en la col ganador), lo contamos
-             if (positiveValues.includes(cleanWinner) || cleanWinner.length > 3) {
-                 if (cleanWinner !== 'NO') {
-                     if (combinedHistory) combinedHistory += ', ';
-                     // Si el valor es solo "SI", ponemos un texto genérico, si es texto (ej "Celta"), lo usamos
-                     combinedHistory += (cleanWinner === 'SI' || cleanWinner === 'SÍ') ? 'Sorteo Anterior' : winnerValue.trim();
+            // 1. Columnas explícitas de lista ("Historial", "Anteriores")
+            if (/historial|anteriores|ganados|history|premios/.test(lowerKey)) {
+                 value.split(/[,;]/).forEach(item => {
+                     const itemClean = item.trim();
+                     if (itemClean && itemClean.toUpperCase() !== 'NO') historySet.add(itemClean);
+                 });
+            }
+            // 2. Columnas individuales de jornada ("Jornada 1", "Ganador Celta", "Partido X")
+            // Evitamos la columna de pago y la de nombre/id/telefono
+            else if (
+                /ganador|winner|premiado|partido|match|jornada|encuentro|vs/.test(lowerKey) &&
+                !/nombre|name|apellidos|id|socio|tel|phone|cuota|pago|pagad/.test(lowerKey)
+            ) {
+                 // Si el valor es positivo (SI, OK) o es un texto descriptivo (ej: "Tribuna", "Entregado")
+                 if (positiveValues.includes(upperValue) || value.length > 2) {
+                     if (upperValue !== 'NO') {
+                         // Si dice "SI", guardamos el nombre de la columna (ej: "Jornada 5")
+                         // Si dice "Celta", guardamos "Celta"
+                         const historyEntry = (positiveValues.includes(upperValue)) ? key : value;
+                         historySet.add(historyEntry);
+                     }
                  }
-             }
-        }
+            }
+        });
 
-        // Convertimos la cadena final en array
-        const historyList = combinedHistory 
-            ? combinedHistory.split(/[,;]/).map(s => s.trim()).filter(s => s !== '' && s.toUpperCase() !== 'NO') 
-            : [];
+        const historyList = Array.from(historySet);
 
         return {
             id: row[findKey(['id', 'socio', 'número', 'numero'])] || '0',
             name: row[findKey(['nombre', 'name', 'apellidos'])] || 'Desconocido',
-            // Ampliamos la búsqueda de teléfono para incluir variantes comunes
             phone: row[findKey(['teléfono', 'telefono', 'movil', 'phone', 'tfn', 'tfno', 'celular', 'móvil'])] || '',
             paid: isPaid ? 'SI' : 'NO',
             imageUrl: rawImgUrl,
