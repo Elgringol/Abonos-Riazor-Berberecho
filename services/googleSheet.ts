@@ -1,5 +1,4 @@
 import { Member } from '../types';
-import { parseCSV } from '../utils';
 
 // URL de la hoja publicada (Pestaña específica vía GID=991040855)
 const SHEET_ID = '2PACX-1vTpvAQ9nLTEZ1jcFFW3npN8rbxi0jTR6nRPT3sR5r25wO1ZOc7dQNBYm7n_zrAyGooKO6s8FCj_fskq';
