@@ -63,7 +63,7 @@ const generateLinkForMember = (member: Member, referenceTimestamp?: number, slot
 
 const getWhatsAppMessage = (member: Member, link: string) => {
     const firstName = getFirstName(member.name);
-    return generateWhatsAppLink(member.phone, `👋 Hola *${firstName.toUpperCase()}*,\n\n🔵⚪ *TU ABONO DIGITAL - DÉPOR*\n\nAquí tienes tu enlace de acceso único para entrar en Riazor:\n👇👇👇\n${link}\n\n🚨 *INSTRUCCIONES IMPORTANTES:*\n1️⃣ 🔆 Sube el *BRILLO* de tu móvil al máximo.\n2️⃣ 📲 Muestra el *CÓDIGO DE BARRAS* en el torno.\n3️⃣ ❌ *NO* uses captura de pantalla (el pase caduca).\n\n¡Nos vemos en Riazor! ¡Forza Dépor!`);
+    return generateWhatsAppLink(member.phone, `👋 Hola *${firstName.toUpperCase()}*,\n\n🔵⚪ *TU ABONO DIGITAL - DÉPOR*\n\nAquí tienes tu enlace de acceso único para entrar en Riazor:\n👇👇👇\n${link}\n\n🚨 *INSTRUCCIONES IMPORTANTES:*\n1️⃣ 🔆 Sube el *BRILLO* de tu móvil al máximo.\n2️⃣ 📲 Muestra el *CÓDIGO DE BARRAS* en el torno.\n3️⃣ ❌ *NO* uses captura de pantalla (el pase caduca).\n4️⃣ ⏳ *ANTICIPACIÓN:* Accede al enlace con tiempo suficiente antes de llegar al torno para evitar incidencias o retrasos en la entrada al estadio.\n\n¡Nos vemos en Riazor! ¡Forza Dépor!`);
 };
 
 const getRaffleWinnerMessage = (member: Member, matchName: string) => {
