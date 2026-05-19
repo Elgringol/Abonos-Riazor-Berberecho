@@ -1,20 +1,80 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Acceso Peña Deportivista</title>
+    
+    <!-- Configuración de Iconos e Instalación (PWA) -->
+    <meta name="theme-color" content="#004899" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Abonos Berberecho">
 
-# Run and deploy your AI Studio app
+    <!-- Icono para Pestañas (Favicon) -->
+    <link rel="icon" href="https://drive.google.com/thumbnail?id=10m8lfNupdyr8st5zXKE5xobx-NsciILT&sz=w64" />
+    
+    <!-- Icono para iPhone/iPad (Apple Touch Icon) -->
+    <link rel="apple-touch-icon" href="https://drive.google.com/thumbnail?id=10m8lfNupdyr8st5zXKE5xobx-NsciILT&sz=w180" />
+    
+    <!-- Manifiesto para Android y Windows -->
+    <link rel="manifest" href="/manifest.json" />
 
-This contains everything you need to run your app locally.
+    <!-- Preconexiones para velocidad de imagen (Estrategia Hydra) -->
+    <link rel="preconnect" href="https://drive.google.com" />
+    <link rel="preconnect" href="https://lh3.googleusercontent.com" />
+    <link rel="preconnect" href="https://wsrv.nl" />
+    <link rel="preconnect" href="https://images.weserv.nl" />
 
-View your app in AI Studio: https://ai.studio/apps/drive/13vWHL30JbhpCkslxTVRPXa90keVI08JO
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              depor: {
+                blue: '#004899',
+                light: '#367bd1',
+              },
+              orange: {
+                brand: '#ea5c1e',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Prevent text selection and image dragging for security */
+      .secure-view {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+      img {
+        -webkit-user-drag: none;
+        pointer-events: none;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "html-to-image": "https://aistudiocdn.com/html-to-image@^1.11.11",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-50 text-gray-900 font-sans antialiased">
+    <div id="root"></div>
+    <!-- Entry point for Vite build -->
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
