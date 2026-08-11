@@ -9,8 +9,8 @@ import { Search, Share2, CheckCircle, RefreshCw, XCircle, Eye, Send, Pencil, Use
 
 // --- Constantes Visuales ---
 const LOGO_ID = "10m8lfNupdyr8st5zXKE5xobx-NsciILT";
-const LOGO_URL = `https://drive.google.com/thumbnail?id=${LOGO_ID}&sz=w800`;
-const RAFFLE_BG_URL = "https://drive.google.com/thumbnail?id=16VQH_e1nCpqc52vRHPRKYzrCTLDSTXpc&sz=w1080"; 
+const LOGO_URL = `https://lh3.googleusercontent.com/d/${LOGO_ID}=s800`;
+const RAFFLE_BG_URL = "https://lh3.googleusercontent.com/d/16VQH_e1nCpqc52vRHPRKYzrCTLDSTXpc=s1080"; 
 const CURRENT_SEASON = "25/26"; 
 
 // Definición estática de los asientos para el modo "Fail-Safe"
@@ -61,9 +61,19 @@ const generateLinkForMember = (member: Member, referenceTimestamp?: number, slot
     return `${baseUrl}/#/view?${params.toString()}`;
 };
 
-const getWhatsAppMessage = (member: Member, link: string) => {
+const getWhatsAppMessage = (member: Member, link: string, slotId?: number) => {
     const firstName = getFirstName(member.name);
-    return generateWhatsAppLink(member.phone, `👋 Hola *${firstName.toUpperCase()}*,\n\n🔵⚪ *TU ABONO DIGITAL - DÉPOR*\n\nAquí tienes tu enlace de acceso único para entrar en Riazor:\n👇👇👇\n${link}\n\n🚨 *INSTRUCCIONES IMPORTANTES:*\n1️⃣ 🔆 Sube el *BRILLO* de tu móvil al máximo.\n2️⃣ 📲 Muestra el *CÓDIGO DE BARRAS* en el torno.\n3️⃣ ❌ *NO* uses captura de pantalla (el pase caduca).\n4️⃣ ⏳ *ANTICIPACIÓN:* Accede al enlace con tiempo suficiente antes de llegar al torno para evitar incidencias o retrasos en la entrada al estadio.\n\n¡Nos vemos en Riazor! ¡Forza Dépor!`);
+    let locationDetail = "Puertas 14-19";
+    if (slotId) {
+        const slot = PASS_SLOTS.find(s => s.slotId === slotId);
+        if (slot?.seatInfo) {
+            locationDetail = slot.seatInfo.includes('F:') ? slot.seatInfo.replace('F:', 'FILA ').replace('A:', 'ASI. ') : slot.seatInfo;
+        }
+    }
+    return generateWhatsAppLink(
+        member.phone, 
+        `👋 Hola *${firstName.toUpperCase()}*,\n\n🔵⚪ *TU ABONO DIGITAL - DÉPOR*\n📍 *Preferencia Inferior Impar | ${locationDetail}*\n\nAquí tienes tu enlace de acceso único para entrar en Riazor:\n👇👇👇\n${link}\n\n🚨 *INSTRUCCIONES IMPORTANTES:*\n1️⃣ 🔆 Sube el *BRILLO* de tu pantalla al máximo.\n2️⃣ 📲 Muestra el *CÓDIGO QR* en el lector del torno.\n3️⃣ 🌐 *COBERTURA:* Abre el enlace unos minutos antes de llegar por si hay saturación de red en el estadio.\n4️⃣ ❌ *NO* utilices captura de pantalla (el código es dinámico y caduca).\n\n¡Nos vemos en Riazor! ¡Forza Dépor! ⚽🔥`
+    );
 };
 
 const getRaffleWinnerMessage = (member: Member, matchName: string) => {
@@ -571,7 +581,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 pb-24 font-sans">
       {/* HEADER */}
-      <header className="-mx-4 -mt-4 mb-6 text-center pt-10 pb-6 bg-white rounded-b-[2.5rem] shadow-sm border-b border-gray-100 relative overflow-hidden">
+      <header className="max-w-md mx-auto mb-6 text-center pt-8 pb-6 bg-white rounded-3xl shadow-sm border border-gray-100 relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 bg-depor-blue/5 rounded-b-[50%] -z-10"></div>
         <div className="absolute top-4 right-4 flex flex-col items-end gap-1">
              <button onClick={refreshAllData} disabled={syncStatus === 'syncing'} className={`p-2 rounded-full transition-all ${syncStatus === 'syncing' ? 'bg-blue-100 text-depor-blue' : 'bg-white text-gray-400 hover:text-depor-blue shadow-sm border border-gray-100'}`}><RefreshCw className={`w-4 h-4 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} /></button>
@@ -851,18 +861,18 @@ const Dashboard: React.FC = () => {
       
       {(quickShareData || selectedPreviewData) && (
         <div className="fixed inset-0 bg-neutral-900/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4">
-             <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
-                <button onClick={() => {closeQuickShare(); closePreview();}} className="absolute right-4 top-4 text-gray-400"><XCircle className="w-6 h-6" /></button>
+             <div className="bg-white w-full max-w-md rounded-3xl p-4 sm:p-5 shadow-2xl relative">
+                <button onClick={() => {closeQuickShare(); closePreview();}} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 z-20"><XCircle className="w-6 h-6" /></button>
                 <div id={`popup-card`} className="mb-4 flex justify-center">
                     <CardCanvas 
                         memberId={(quickShareData || selectedPreviewData)!.member.id} 
                         memberName={(quickShareData || selectedPreviewData)!.member.name} 
                         imageUrl={(quickShareData || selectedPreviewData)!.imageUrl} 
                         referenceTimestamp={lastResetTime} 
-                        seatInfo={`Asiento ${(quickShareData || selectedPreviewData)!.slotId}`} // <-- INTEGRACIÓN CRÍTICA DEL MODO FAIL-SAFE
+                        seatInfo={PASS_SLOTS.find(s => s.slotId === (quickShareData || selectedPreviewData)!.slotId)?.seatInfo}
                     />
                 </div>
-                {quickShareData && (<div className="grid grid-cols-2 gap-3"><a href={getWhatsAppMessage(quickShareData.member, generateLinkForMember(quickShareData.member, lastResetTime, quickShareData.slotId))} target="_blank" rel="noreferrer" className="bg-[#25D366] text-white font-bold py-3 px-4 rounded-xl text-center text-sm flex items-center justify-center gap-2 hover:bg-[#20bd5a] transition-all"><Send className="w-4 h-4" /> WhatsApp</a><button onClick={() => handleCopyLink(quickShareData.member, quickShareData.slotId)} className="bg-blue-50 text-depor-blue border border-blue-100 font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-blue-100 transition-all"><Link className="w-4 h-4" /> Copiar Enlace</button></div>)}
+                {quickShareData && (<div className="grid grid-cols-2 gap-3"><a href={getWhatsAppMessage(quickShareData.member, generateLinkForMember(quickShareData.member, lastResetTime, quickShareData.slotId), quickShareData.slotId)} target="_blank" rel="noreferrer" className="bg-[#25D366] text-white font-bold py-3 px-4 rounded-xl text-center text-sm flex items-center justify-center gap-2 hover:bg-[#20bd5a] transition-all"><Send className="w-4 h-4" /> WhatsApp</a><button onClick={() => handleCopyLink(quickShareData.member, quickShareData.slotId)} className="bg-blue-50 text-depor-blue border border-blue-100 font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-blue-100 transition-all"><Link className="w-4 h-4" /> Copiar Enlace</button></div>)}
              </div>
         </div>
       )}
