@@ -6,19 +6,18 @@ interface CardCanvasProps {
   memberName: string;
   imageUrl?: string;
   referenceTimestamp?: number;
-  seatInfo?: string; // Mantenemos la prop por compatibilidad, aunque no se renderice visualmente
+  seatInfo?: string;
 }
 
 const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl, referenceTimestamp }) => {
+  // --- MARCA DE AGUA SEGURIDAD (Logo Peña) ---
+  const PENA_LOGO_ID = "17pNVMd42F6pDU7LOCPjPZ-xrUckcYNMe";
+  const WM_SRC = `https://lh3.googleusercontent.com/d/${PENA_LOGO_ID}=s800`;
+
   // Estados de carga: 'idle' | 'loading' | 'success' | 'error'
   const [loadStatus, setLoadStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
-
-  // --- LOGO PEÑA (Marca de Agua) ---
-  const PENA_LOGO_ID = "17pNVMd42F6pDU7LOCPjPZ-xrUckcYNMe";
-  // Usamos CDN rápido para la marca de agua también para evitar cuellos de botella
-  const WM_SRC = `https://wsrv.nl/?url=${encodeURIComponent(`https://drive.google.com/thumbnail?id=${PENA_LOGO_ID}&sz=w600`)}&output=png&il`;
 
   // --- FECHA CADUCIDAD ---
   const expirationString = useMemo(() => {
@@ -104,45 +103,82 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
   }, []);
 
   return (
-    <div id={`card-${memberId}`} className="relative w-full max-w-[340px] mx-auto bg-white select-none">
+    <div id={`card-${memberId}`} className="relative w-full max-w-[420px] mx-auto select-none">
       
-      {/* CONTENEDOR PRINCIPAL */}
-      <div className="relative overflow-hidden rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-white flex flex-col min-h-[480px]">
+      {/* CONTENEDOR PRINCIPAL - Imagen expandida con overlays de información */}
+      <div className="relative overflow-hidden rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-[#f08e5c] border border-gray-800/20">
         
-        {/* ZONA DE IMAGEN */}
-        <div className="relative w-full h-full bg-gray-900 flex-1 min-h-[480px] flex items-center justify-center">
+        {/* ZONA DE IMAGEN DEL ABONO (Aprovecha el espacio completo) */}
+        <div className="relative w-full bg-[#f08e5c] flex items-center justify-center overflow-hidden min-h-[380px]">
             
             {/* SPINNER DE CARGA */}
             {loadStatus === 'loading' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 z-20">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-20">
                     <Loader2 className="w-10 h-10 animate-spin text-depor-blue mb-3" />
-                    <p className="text-xs font-bold text-gray-500 animate-pulse">
+                    <p className="text-xs font-bold text-gray-400 animate-pulse">
                         {currentSourceIndex === 0 ? "Cargando pase seguro..." : "Conectando servidor de respaldo..."}
                     </p>
                 </div>
             )}
 
-            {/* IMAGEN DEL ABONO (El núcleo del acceso) */}
+            {/* IMAGEN DEL ABONO (Ocupa el máximo espacio vertical/horizontal) */}
             {currentSrc && loadStatus !== 'error' && (
                 <img 
                     src={currentSrc}
                     alt="Abono Digital"
                     crossOrigin="anonymous"
-                    loading="eager" // Prioridad máxima
-                    // --- MODO ESCÁNER ---
-                    // contrast-125: Aumenta la diferencia entre blancos y negros (Barcode Friendly)
-                    // brightness-110: Compensa pantallas oscuras
-                    // mix-blend-normal: Asegura renderizado estándar
-                    className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-300 contrast-125 brightness-110 ${loadStatus === 'success' ? 'opacity-100' : 'opacity-0'}`}
-                    style={{ imageRendering: 'auto' }} // Permitimos suavizado para textos, pero el contraste alto ayuda al código de barras
+                    loading="eager"
+                    // --- MODO OPTIMIZADO PARA TORNO ---
+                    // w-full object-contain: Expande el abono al máximo ancho de la pantalla sin deformarlo
+                    // contrast-[1.25] brightness-[1.05]: Maximiza contraste para escáneres
+                    className={`w-full h-auto max-h-[85vh] object-contain transition-opacity duration-300 contrast-[1.25] brightness-[1.05] ${loadStatus === 'success' ? 'opacity-100' : 'opacity-0'}`}
+                    style={{ imageRendering: 'auto' }}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
                 />
             )}
 
-            {/* PANTALLA DE ERROR FINAL (Si fallan las 3 vías) */}
+            {/* FECHA DE CADUCIDAD (SUPERPUESTA EN LA PARTE SUPERIOR DERECHA) */}
+            {loadStatus === 'success' && (
+                <div className="absolute top-3 right-3 z-20 pointer-events-none">
+                    <span className="flex items-center gap-1.5 bg-gray-950/85 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-full border border-white/20 shadow-lg">
+                        <Clock className="w-3.5 h-3.5 text-orange-400" />
+                        <span>CADUCA: <strong className="text-orange-400">{expirationString}</strong></span>
+                    </span>
+                </div>
+            )}
+
+            {/* MARCA DE AGUA DE SEGURIDAD (Centrada sobre la zona de grada/fila/asiento del abono, justo antes del marco negro) */}
+            {loadStatus === 'success' && (
+                <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex items-center justify-center opacity-20 mix-blend-multiply drop-shadow-sm max-w-[85%]">
+                    <img 
+                        src={WM_SRC} 
+                        alt="" 
+                        crossOrigin="anonymous" 
+                        className="h-[240px] max-h-[50vh] w-auto object-contain filter contrast-125 brightness-110"
+                    />
+                </div>
+            )}
+
+            {/* MARCO NEGRO SUPERPUESTO EN LA PARTE INFERIOR (NOMBRE E ID DE SOCIO) */}
+            {loadStatus === 'success' && (
+                <div className="absolute bottom-0 inset-x-0 bg-gray-950/90 backdrop-blur-md text-white px-4 py-2.5 flex items-center justify-between border-t border-gray-800/80 z-20 pointer-events-none">
+                    <div className="min-w-0 pr-3">
+                        <h2 className="text-xs sm:text-sm font-black uppercase tracking-tight text-white leading-tight truncate">
+                            {memberName}
+                        </h2>
+                    </div>
+                    <div className="shrink-0 text-right">
+                        <p className="text-[11px] text-gray-300 font-mono">
+                            ID SOCIO: <span className="text-white font-bold">{memberId}</span>
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* PANTALLA DE ERROR FINAL */}
             {loadStatus === 'error' && (
-                <div className="absolute inset-0 z-30 bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
+                <div className="absolute inset-0 z-30 bg-gray-900 flex flex-col items-center justify-center p-6 text-center min-h-[380px]">
                     <WifiOff className="w-16 h-16 text-red-500 mb-4" />
                     <h3 className="text-white font-bold text-xl mb-2">Error de Carga</h3>
                     <p className="text-gray-400 text-sm mb-6">
@@ -154,51 +190,15 @@ const CardCanvas: React.FC<CardCanvasProps> = ({ memberId, memberName, imageUrl,
                     >
                         <RefreshCw className="w-5 h-5" /> REINTENTAR AHORA
                     </button>
-                    {/* ELIMINADO: Bloque visual de Fail-Safe (Fila/Asiento). El código de barras es mandatorio. */}
                 </div>
             )}
 
-            {/* 2. SUPERPOSICIÓN DE DATOS (Overlay) */}
-            {/* Se muestra siempre sobre la imagen para validar identidad visualmente */}
-            <div className="absolute top-0 left-0 w-full pt-6 pb-12 px-5 bg-gradient-to-b from-black/80 via-black/20 to-transparent z-10 pointer-events-none">
-                 <div className="flex flex-col items-start w-full drop-shadow-md">
-                    <h2 className="text-2xl font-black text-white leading-tight uppercase tracking-tight" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-                        {memberName}
-                    </h2>
-                    <div className="mt-2 w-full flex items-center justify-between">
-                        <span className="bg-white/20 backdrop-blur-md text-white text-[11px] font-bold px-2 py-0.5 rounded border border-white/30 shadow-sm">
-                            ID: {memberId}
-                        </span>
-                        <span className="flex items-center gap-1 bg-orange-600/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded border border-white/20 shadow-sm">
-                            <Clock className="w-3 h-3" />
-                            CADUCA: {expirationString}
-                        </span>
-                    </div>
-                 </div>
-            </div>
-
-            {/* 3. MARCA DE AGUA (Solo visible si carga ok) */}
-            {loadStatus === 'success' && (
-                <div className="absolute top-[20%] left-0 w-full h-[30%] flex items-center justify-center pointer-events-none z-10 overflow-hidden mix-blend-soft-light opacity-50">
-                    <img 
-                        src={WM_SRC} 
-                        alt="" 
-                        crossOrigin="anonymous"
-                        className="w-[40%] grayscale"
-                    />
-                </div>
-            )}
-            
-            {/* EFECTO DE ESCÁNER (Línea de luz que recorre el abono) */}
-            {/* Da feedback visual de que la app está "viva" y no es una captura de pantalla */}
-            <div className="absolute top-0 w-full h-[2px] bg-white/50 shadow-[0_0_15px_rgba(255,255,255,0.8)] animate-[scan_3s_linear_infinite] pointer-events-none z-10"></div>
+            {/* EFECTO DE ESCÁNER LIGERO */}
+            <div className="absolute top-0 w-full h-[2px] bg-blue-400/40 shadow-[0_0_10px_rgba(96,165,250,0.8)] animate-[scan_3s_linear_infinite] pointer-events-none z-10 opacity-70"></div>
         </div>
-        
-        {/* Hologram Overlay (Estética de seguridad) */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-20 pointer-events-none z-20" style={{ mixBlendMode: 'overlay' }}></div>
       </div>
       
-      <p className="text-center text-[10px] text-gray-400 mt-4 font-medium uppercase tracking-widest">
+      <p className="text-center text-[10px] text-gray-400 mt-2.5 font-medium uppercase tracking-widest">
         Aumente el brillo de la pantalla al máximo
       </p>
     </div>

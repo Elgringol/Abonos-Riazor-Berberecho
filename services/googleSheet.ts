@@ -6,16 +6,16 @@ const GID = '991040855';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?gid=${GID}&single=true&output=csv`;
 
 export const DEFAULT_IMAGES = [
-  "https://drive.google.com/file/d/19GnkjVFkIVumPCP82vNLtw3KSlUlmmQp/view?usp=drivesdk",
-  "https://drive.google.com/file/d/1w-xb5fbA1VFx2cL6h71qYTg6SHhMVyFv/view?usp=drivesdk",
-  "https://drive.google.com/file/d/1WwInvzBVjlN0lKn1Qj_0EN5nCn3AFKzS/view?usp=drivesdk",
-  "https://drive.google.com/file/d/1ya69kWqk5I51rZi3b3segCSlguJvROqS/view?usp=drivesdk",
-  "https://drive.google.com/file/d/1OKgnXQiRIHdOYhzHkN2xHekhJhZJ2UI2/view?usp=drivesdk",
-  "https://drive.google.com/file/d/1o8O3jrNVUh1WqvJCFslzorKJssnDQlI2/view?usp=drivesdk",
-  "https://drive.google.com/file/d/1Xk0XDbU9YrScl5KE4NudYyddRA0mvO_O/view?usp=drivesdk",
-  "https://drive.google.com/file/d/11hWN3SIEc-i2BoaM5gv0vxxjWBevY9WE/view?usp=drivesdk",
-  "https://drive.google.com/file/d/14cT5cd4vz81cSb4aeB0upPsctTOFKEOq/view?usp=drivesdk",
-  "https://drive.google.com/file/d/1bvol3kzgyV601iwDNJUceokAgK-i6Ekw/view?usp=drivesdk"
+  "https://drive.google.com/file/d/11inxZ7ldwzzFp3VBqiYogIrzwyMbMbk2/view?usp=drive_link",
+  "https://drive.google.com/file/d/1RHS5tGNBCbHAD7DuZgfe-mB_7qJO-Uq-/view?usp=drive_link",
+  "https://drive.google.com/file/d/17RF-EjtVfOmnqnvIueaoj_FBnyEpRjln/view?usp=drive_link",
+  "https://drive.google.com/file/d/1k-Yk6YS0pA8_GYauUQR7KURZzqcHawE4/view?usp=drive_link",
+  "https://drive.google.com/file/d/1vIIR4DkbvgWjUTUeYJRhBlgWX8sfHuFX/view?usp=drive_link",
+  "https://drive.google.com/file/d/13tklkf0fR48UYqogP1o5GzyEQbFxv6_E/view?usp=drive_link",
+  "https://drive.google.com/file/d/1XW3eA8oAEAPMfer-QBZoxrsEtiPLyCZr/view?usp=drive_link",
+  "https://drive.google.com/file/d/13cdnvttXfbBgU7--cM_lbs3jwfbWMfCy/view?usp=drive_link",
+  "https://drive.google.com/file/d/1S3_Cb5qOfqK8gkCDCR5s-1Fq71faDToL/view?usp=drive_link",
+  "https://drive.google.com/file/d/1Kk_mqoxKKZAA_vcmb_T9oINdOHZkesO-/view?usp=drive_link"
 ];
 
 /**
