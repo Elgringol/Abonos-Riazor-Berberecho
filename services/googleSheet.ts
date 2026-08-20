@@ -1,8 +1,8 @@
 import { Member } from '../types';
 
-// URL de la hoja publicada (Pestaña específica vía GID=991040855)
-const SHEET_ID = '2PACX-1vTpvAQ9nLTEZ1jcFFW3npN8rbxi0jTR6nRPT3sR5r25wO1ZOc7dQNBYm7n_zrAyGooKO6s8FCj_fskq';
-const GID = '991040855';
+// URL de la nueva hoja publicada de la temporada 2026/2027
+const SHEET_ID = '2PACX-1vTzpcKXqDbkpJmKZQ-ZubCORPGyqFS_MsoqGWViel1lDwhTQu-5Saz9RiSqQMSq7moROwnCwCYA2TOt';
+const GID = '484157534';
 const CSV_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?gid=${GID}&single=true&output=csv`;
 
 export const DEFAULT_IMAGES = [
@@ -48,57 +48,68 @@ export const fetchMembers = async (): Promise<Member[]> => {
     
     if (lines.length < 2) return [];
 
-    // Omitimos la cabecera y procesamos cada fila
-    return lines.slice(1).map((line, index) => {
-        const row = parseCSVLine(line);
-        
-        /**
-         * MAPEADO ESTRICTO POR COLUMNAS:
-         * A (0): ID
-         * B (1): Nombre Socio
-         * C (2): Teléfono
-         * D (3): Cuota Pagada (SI o NO)
-         * E (4): Socio Ganador en jornadas anteriores
-         * F (5): Partido Ganador
-         */
-        
-        const id = row[0] || `S-${index}`;
-        const name = row[1] || 'Socio Desconocido';
-        const phone = row[2] || '';
-        
-        // --- COLUMNA D: ESTADO DE PAGO ---
-        const rawPaid = (row[3] || '').toUpperCase();
-        const isPaid = rawPaid === 'SI' || rawPaid === 'SÍ' || rawPaid === 'OK';
+    // Localizar dinámicamente la fila de cabecera y el índice de cada columna
+    let headerRowIdx = -1;
+    let colIdIdx = 0;
+    let colNameIdx = 1;
+    let colPaidIdx = 2;
+    let colPhoneIdx = 8;
 
-        // --- COLUMNAS E y F: HISTORIAL DE GANADORES ---
-        const historySet = new Set<string>();
-        const colE = (row[4] || '').toUpperCase(); // "SI" o "GANADOR" o "NO"
-        const colF = (row[5] || '').trim();         // Nombre del partido (ej: "Real Madrid")
+    for (let i = 0; i < Math.min(lines.length, 10); i++) {
+      const cols = parseCSVLine(lines[i]).map(c => c.toUpperCase().trim());
+      const idIdx = cols.findIndex(c => c === 'ID' || c === 'Nº' || c === 'SOCIO' || c === 'NUMERO');
+      const nameIdx = cols.findIndex(c => c.includes('NOME') || c.includes('NOMBRE') || c.includes('APELIDOS') || c.includes('SOCIO'));
+      const paidIdx = cols.findIndex(c => c.includes('PAG') || c.includes('CUOTA'));
+      const phoneIdx = cols.findIndex(c => c.includes('TLF') || c.includes('TEL') || c.includes('MOVIL') || c.includes('MÓVIL'));
 
-        // Si E indica victoria, añadimos el nombre del partido de F (o de E si F está vacío)
-        if (colE === 'SI' || colE === 'SÍ' || (colE.length > 2 && colE !== 'NO')) {
-            const matchName = (colF && colF.toUpperCase() !== 'NO' && colF !== '-') 
-                ? colF 
-                : (colE !== 'SI' && colE !== 'SÍ' ? row[4] : 'Ganador Anterior');
-            if (matchName) historySet.add(matchName);
+      if (idIdx !== -1 && (nameIdx !== -1 || paidIdx !== -1)) {
+        headerRowIdx = i;
+        colIdIdx = idIdx;
+        if (nameIdx !== -1) colNameIdx = nameIdx;
+        if (paidIdx !== -1) colPaidIdx = paidIdx;
+        if (phoneIdx !== -1) colPhoneIdx = phoneIdx;
+        break;
+      }
+    }
+
+    const dataLines = headerRowIdx !== -1 ? lines.slice(headerRowIdx + 1) : lines.slice(1);
+
+    const members: Member[] = [];
+
+    for (let index = 0; index < dataLines.length; index++) {
+      const line = dataLines[index];
+      const row = parseCSVLine(line);
+      const id = (row[colIdIdx] || '').trim();
+      const name = (row[colNameIdx] || '').trim();
+      
+      // Descartar filas vacías o de sumatorios
+      if (!id || !name || (isNaN(Number(id)) && !id.startsWith('S-'))) {
+        if (!name || name.toUpperCase().includes('TOTAL') || name.toUpperCase().includes('LISTADO')) {
+          continue;
         }
+      }
 
-        // --- IMAGEN ---
-        // Si hay una columna G (6) la usamos, si no, fallback rotativo
-        let imageUrl = row[6] || '';
-        if (!imageUrl || !imageUrl.startsWith('http')) {
-            imageUrl = DEFAULT_IMAGES[index % DEFAULT_IMAGES.length];
-        }
+      const rawPhone = row[colPhoneIdx] || (row[2] && row[2].match(/\d{9}/) ? row[2] : '') || '';
+      const phone = rawPhone.replace(/\D/g, '');
 
-        return {
-            id,
-            name,
-            phone,
-            paid: isPaid ? 'SI' : 'NO',
-            imageUrl,
-            history: Array.from(historySet)
-        };
-    });
+      // Estado de pago
+      const rawPaid = (row[colPaidIdx] || '').toUpperCase().trim();
+      const isPaid = rawPaid === 'SI' || rawPaid === 'SÍ' || rawPaid === 'OK' || rawPaid === 'PAGADO';
+
+      // Imagen predeterminada rotativa
+      const imageUrl = DEFAULT_IMAGES[index % DEFAULT_IMAGES.length];
+
+      members.push({
+        id: id || `S-${index + 1}`,
+        name: name || 'Socio Desconocido',
+        phone,
+        paid: isPaid ? 'SI' : 'NO',
+        imageUrl,
+        history: []
+      });
+    }
+
+    return members.filter(m => m.name !== 'Socio Desconocido' && m.id !== '');
   } catch (error) {
     console.error("Failed to load members from Google Sheets", error);
     return [];

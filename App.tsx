@@ -86,8 +86,15 @@ const reconstructCycleHistory = (history: MatchHistoryRecord[]): string[] => {
     // Procesamos el historial cronológicamente
     const sortedHistory = [...history].sort((a, b) => a.date - b.date);
     sortedHistory.forEach(match => {
-        if (match.isCycleReset) cycleIds.clear();
-        match.winners.forEach(w => cycleIds.add(w.id));
+        if (match.isCycleReset) {
+            cycleIds.clear();
+            // Si el partido de reinicio especificó qué ganadores pertenecían al nuevo ciclo
+            if (match.newCycleWinnerIds && match.newCycleWinnerIds.length > 0) {
+                match.newCycleWinnerIds.forEach(id => cycleIds.add(id));
+            }
+        } else {
+            match.winners.forEach(w => cycleIds.add(w.id));
+        }
     });
     return Array.from(cycleIds);
 };
@@ -322,36 +329,65 @@ const Dashboard: React.FC = () => {
   }, [winnersStatus, raffleWinners]);
 
   const raffleStats = useMemo(() => {
-      const activeMembers = allMembers.filter(m => m.paid === 'SI');
-      const pendingToWin = activeMembers.filter(m => !cycleHistory.includes(m.id) && !(m.history && m.history.length > 0));
+      // 1. Socios con cuota pagada esta temporada ('SI' o 'SÍ' o 'OK')
+      const activeMembers = allMembers.filter(m => 
+          m.paid.toUpperCase() === 'SI' || m.paid.toUpperCase() === 'SÍ' || m.paid.toUpperCase() === 'OK'
+      );
+
+      // 2. IDs de socios premiados en el ciclo actual cerrado en historial
+      const awardedIds = new Set(cycleHistory);
+
+      // 3. Si hay un sorteo activo en pantalla, los ganadores también descuentan de pendientes
+      raffleWinners.forEach(w => awardedIds.add(w.id));
+
+      // 4. Socios pagados que todavía NO han salido en este ciclo
+      const pendingToWin = activeMembers.filter(m => !awardedIds.has(m.id));
+
       return { 
           total: allMembers.length, 
           active: activeMembers.length, 
           pending: pendingToWin.length
       };
-  }, [allMembers, cycleHistory]);
+  }, [allMembers, cycleHistory, raffleWinners]);
+
+  const [newCycleWinnerIdsState, setNewCycleWinnerIdsState] = useState<string[]>([]);
 
   const runMainRaffle = async () => {
       if (!matchName.trim()) { alert("Introduce el nombre del partido."); return; }
       
-      const eligibleMembers = allMembers.filter(m => m.paid.toUpperCase() === 'SI' || m.paid.toUpperCase() === 'SÍ');
+      const eligibleMembers = allMembers.filter(m => 
+          m.paid.toUpperCase() === 'SI' || m.paid.toUpperCase() === 'SÍ' || m.paid.toUpperCase() === 'OK'
+      );
+
+      if (eligibleMembers.length === 0) {
+          alert("⚠️ No hay socios con cuota pagada activos para sortear.");
+          return;
+      }
+
       let winners: Member[] = [];
       let cycleResetOccurred = false;
+      let newCycleIds: string[] = [];
       
-      let availableInCycle = eligibleMembers.filter(m => !cycleHistory.includes(m.id) && !(m.history && m.history.length > 0));
+      // Socios activos con cuota pagada que aún no han ganado en este ciclo
+      const availableInCycle = eligibleMembers.filter(m => !cycleHistory.includes(m.id));
 
       if (availableInCycle.length < 10) {
-          // No hay suficientes en el ciclo actual -> RESET
+          // Fin de ciclo: Entran todos los que quedaban pendientes en el ciclo actual
           winners = [...availableInCycle];
-          const winnersIds = new Set(winners.map(w => w.id));
-          const refreshedPot = eligibleMembers.filter(m => !winnersIds.has(m.id));
-          const spotsNeeded = 10 - winners.length;
+          const oldWinnersIds = new Set(winners.map(w => w.id));
           
-          const shuffledPot = [...refreshedPot].sort(() => 0.5 - Math.random());
-          winners = [...winners, ...shuffledPot.slice(0, spotsNeeded)];
+          // El resto de plazas hasta 10 se sortean entre el nuevo ciclo de socios activos
+          const spotsNeeded = 10 - winners.length;
+          if (spotsNeeded > 0) {
+              const refreshedPot = eligibleMembers.filter(m => !oldWinnersIds.has(m.id));
+              const shuffledPot = [...refreshedPot].sort(() => 0.5 - Math.random());
+              const newCycleWinners = shuffledPot.slice(0, spotsNeeded);
+              newCycleIds = newCycleWinners.map(m => m.id);
+              winners = [...winners, ...newCycleWinners];
+          }
           cycleResetOccurred = true;
       } else {
-          // Sorteo normal
+          // Sorteo normal dentro del ciclo
           const shuffled = [...availableInCycle].sort(() => 0.5 - Math.random());
           winners = shuffled.slice(0, 10);
       }
@@ -360,6 +396,7 @@ const Dashboard: React.FC = () => {
       setWinnersStatus({}); 
       setReserveWinners([]); 
       setWasCycleResetInCurrentRaffle(cycleResetOccurred);
+      setNewCycleWinnerIdsState(newCycleIds);
 
       await persistState({ 
           activeRaffle: { 
@@ -373,7 +410,9 @@ const Dashboard: React.FC = () => {
           } 
       });
 
-      if (cycleResetOccurred) alert("ℹ️ CICLO COMPLETADO: Se reiniciarán las exclusiones al guardar esta jornada.");
+      if (cycleResetOccurred) {
+          alert(`ℹ️ CICLO COMPLETADO: Se han asignado los últimos ${availableInCycle.length} socios pendientes del ciclo y ${newCycleIds.length} socios inician el nuevo ciclo.`);
+      }
   };
 
   const updateWinnerStatus = async (memberId: string, status: WinnerStatus) => {
@@ -422,6 +461,7 @@ const Dashboard: React.FC = () => {
           matchName: matchName, 
           season: CURRENT_SEASON, 
           isCycleReset: wasCycleResetInCurrentRaffle, 
+          newCycleWinnerIds: wasCycleResetInCurrentRaffle ? newCycleWinnerIdsState : undefined,
           winners: [...raffleWinners], 
           reserves: [...reserveList] 
       };
@@ -447,6 +487,7 @@ const Dashboard: React.FC = () => {
           setReserveWinners([]); 
           setWinnersStatus({}); 
           setWasCycleResetInCurrentRaffle(false);
+          setNewCycleWinnerIdsState([]);
           
           alert("✅ Jornada cerrada y guardada."); 
           setCurrentTab('history');
@@ -477,6 +518,23 @@ const Dashboard: React.FC = () => {
       await persistState({ activeRaffle: { matchName, winners: raffleWinners, winnersStatus, reserveList, timestamp: Date.now(), reserveWinners: winners, isCycleReset: wasCycleResetInCurrentRaffle } });
   };
 
+
+  const handleResetCycle = async () => {
+      if (!window.confirm("¿Iniciar un nuevo ciclo de sorteos? (Se conservará todo el historial de partidos pero todos los socios con cuota pagada volverán a entrar en el bombo)")) return;
+      setLoading(true);
+      try {
+          const updatedCycleHistory: string[] = [];
+          setCycleHistory(updatedCycleHistory);
+          setWasCycleResetInCurrentRaffle(false);
+          setNewCycleWinnerIdsState([]);
+          await persistState({ cycleHistory: updatedCycleHistory });
+          alert("✅ Nuevo ciclo iniciado con éxito. Todos los socios con cuota pagada están listos para el sorteo.");
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
+  };
 
   const handleFullReset = async () => {
       if (!window.confirm("⚠️ ¿RESET COMPLETO? (Borrará asignaciones)")) return;
@@ -633,7 +691,12 @@ const Dashboard: React.FC = () => {
       ) : currentTab === 'raffle' ? (
         <div className="max-w-md mx-auto space-y-6 animate-in slide-in-from-right-4 duration-300">
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4"><Calendar className="w-5 h-5 text-orange-brand" /> Partido</h2>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Calendar className="w-5 h-5 text-orange-brand" /> Partido</h2>
+                    <button type="button" onClick={handleResetCycle} title="Reiniciar ciclo de exclusiones para nueva temporada" className="text-xs text-gray-400 hover:text-orange-600 font-medium flex items-center gap-1 bg-gray-50 hover:bg-orange-50 border border-gray-200 hover:border-orange-200 px-2.5 py-1 rounded-lg transition-all">
+                        <RotateCcw className="w-3 h-3" /> Nuevo Ciclo
+                    </button>
+                </div>
                 <div className="space-y-4">
                     <input type="text" placeholder="Ej: Dépor vs Celta" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-brand/20 transition-all font-medium" value={matchName} onChange={(e) => { setMatchName(e.target.value); }} />
                     <div className="grid grid-cols-3 gap-3">

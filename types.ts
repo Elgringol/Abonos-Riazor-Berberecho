@@ -25,6 +25,7 @@ export interface MatchHistoryRecord {
   matchName: string;
   season?: string; // Ej: "24/25", "25/26"
   isCycleReset?: boolean; // Indicates if the exclusion cycle was reset during this raffle
+  newCycleWinnerIds?: string[]; // IDs of winners that start the new cycle
   winners: Member[];
   reserves: Member[];
 }
